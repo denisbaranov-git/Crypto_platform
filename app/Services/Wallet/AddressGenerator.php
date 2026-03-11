@@ -6,18 +6,23 @@ use App\Models\Network;
 use App\Services\Wallet\Generators\EthereumAddressGenerator;
 use App\Services\Wallet\Generators\TronAddressGenerator;
 use App\Services\Wallet\Generators\BitcoinAddressGenerator;
+use Illuminate\Support\Facades\Crypt;
 
 class AddressGenerator implements AddressGeneratorInterface
 {
+    //public function generate(Network $network, int $index): array
     public function generate(Network $network, int $index): array
     {
+        $xpub = config("wallet.{$network->rpc_driver}_xpub", null);
+        if(!$xpub) throw new \Exception('xpub address not defined');//null,false,0,'' etc
+
         return match ($network->rpc_driver) {
 
-            'ethereum' => (new EthereumAddressGenerator())->generate($index),
+            'ethereum' => (new EthereumAddressGenerator($xpub))->generate($index),
 
-            'tron' => (new TronAddressGenerator())->generate($index),
+            'tron' => (new TronAddressGenerator($xpub))->generate($index),
 
-            'bitcoin' => (new BitcoinAddressGenerator())->generate($index),
+            'bitcoin' => (new BitcoinAddressGenerator($xpub))->generate($index),
 
             default => throw new \Exception('Unsupported network'),
         };
