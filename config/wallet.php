@@ -1,7 +1,6 @@
 <?php
 
 return [
-
     /*
     |
     | XPUB для генерации всех HD адресов
@@ -9,5 +8,6 @@ return [
     */
     'ethereum_xpub' => env('ETHEREUM_XPUB'),
     'tron_xpub' => env('TRON_XPUB'),
-    'bitcoin_xpub' => env('BITCOIN_XPUB'),
+    'bsc_xpub' => env('BSC_XPUB'),
+    'polygon_xpub' => env('POLYGON_XPUB'),
 ];

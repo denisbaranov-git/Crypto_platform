@@ -2,13 +2,23 @@
 
 namespace App\Services\Wallet\Generators;
 
-use App\Contracts\AddressGeneratorInterface;
+use App\Services\Wallet\HDAddressGeneratorInterface;
 use Elliptic\EC;
 use StephenHill\Base58;
 use kornrunner\Keccak; // Не используется, но оставляем для совместимости с интерфейсом
 
-class BitcoinAddressGenerator implements AddressGeneratorInterface
+class BitcoinHDAddressGenerator implements HDAddressGeneratorInterface
 {
+    private EC $ec;
+    private Base58 $base58;
+
+    /**
+     * Типы адресов Bitcoin
+     */
+    const ADDRESS_TYPE_LEGACY = 'p2pkh';    // Начинается с 1
+    const ADDRESS_TYPE_SEGWIT = 'p2sh';      // Начинается с 3
+    const ADDRESS_TYPE_NATIVE = 'bech32';    // Начинается с bc1
+
     public function __construct()
     {
         $this->ec = new EC('secp256k1');

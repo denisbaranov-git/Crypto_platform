@@ -2,41 +2,31 @@
 
 namespace App\Services\Wallet\Generators;
 
-//use BitWasp\Bitcoin\Key\Deterministic\HierarchicalKeyFactory;
-use BitWasp\Bitcoin\Key\Deterministic\HierarchicalKeyFactory;
 use kornrunner\Keccak;
 use StephenHill\Base58;
 
 
 class TronAddressGenerator
 {
-    private string $xpub;
-    private HierarchicalKeyFactory $factory;
-    public function __construct(string $xpub)
+    public function generate(): array
     {
-        $this->xpub = $xpub;
-        $this->factory = new HierarchicalKeyFactory();
-    }
+        $ec = new EC('secp256k1');
+        $keyPair = $ec->genKeyPair();
 
-    public function generate(int $index): string
-    {
-        // Восстанавливаем ключ из xpub
-        $extendedKey = $this->factory->fromExtended($this->xpub);
+        $privateKey = $keyPair->getPrivate()->toString(16, 64);
+        $publicKey = $keyPair->getPublic()->encode('hex', false);
 
-        // Деривируем дочерний ключ по индексу
-        // Путь будет: [уже вшитый путь] + $index
-        // То есть m/44'/195'/0'/0/$index
-        $childKey = $extendedKey->deriveChild($index);
+        $publicKey = substr($publicKey, 2); // убираем '04'
 
-        // Получаем публичный ключ
-        $publicKey = $childKey->getPublicKey()->getBuffer()->getHex();
-
-//        $hash = Keccak::hash($publicKeyWithoutPrefix, 256, true);
-//        $addressBin = "\x41" . substr($hash, -20);
         $hash = Keccak::hash(substr($publicKey, 2), 256);
         $hex = '41' . substr($hash, 24);
+        $address =  $this->base58check($hex);
 
-        return $this->base58check($hex);
+        return [
+            'public_key' => $publicKey,
+            'private_key' => $privateKey,
+            'address'     => $address,
+        ];
     }
 
     protected function base58check(string $hex): string
