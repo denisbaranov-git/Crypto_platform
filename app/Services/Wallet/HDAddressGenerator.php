@@ -2,7 +2,6 @@
 
 namespace App\Services\Wallet;
 
-use App\Models\Network;
 use App\Services\Wallet\Generators\EthereumHDAddressGenerator;
 use App\Services\Wallet\Generators\TronHDAddressGenerator;
 use App\Services\Wallet\Generators\BitcoinHDAddressGenerator;
@@ -10,12 +9,12 @@ use Illuminate\Support\Facades\Crypt;
 
 class HDAddressGenerator implements HDAddressGeneratorInterface
 {
-    public function generate(Network $network, int $index): string
+    public function generate(string $network, int $index): string
     {
-        $xpub = config("wallet.{$network->rpc_driver}_xpub", null);
+        $xpub = config("wallet.{$network}_xpub", null);
         if(!$xpub) throw new \Exception('xpub address not defined');//null,false,0,'' etc
 
-        return match ($network->rpc_driver) {
+        return match ($network) {
 
             'ethereum' => (new EthereumHDAddressGenerator($xpub))->generate($index),
 

@@ -10,12 +10,10 @@ use Illuminate\Support\Facades\Crypt;
 
 class AddressGenerator implements AddressGeneratorInterface
 {
-    public function generate(Network $network): array
+    public function generate(string $network): array
     {
-        $xpub = config("wallet.{$network->rpc_driver}_xpub", null);
-        if(!$xpub) throw new \Exception('xpub address not defined');//null,false,0,'' etc
 
-        return match ($network->rpc_driver) {
+        return match ($network) {
 
             'ethereum' => (new EthereumAddressGenerator())->generate(),
 

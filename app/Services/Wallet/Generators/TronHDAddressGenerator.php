@@ -31,24 +31,44 @@ class TronHDAddressGenerator
         // Получаем публичный ключ
         $publicKey = $childKey->getPublicKey()->getBuffer()->getHex();
 
-//        $hash = Keccak::hash($publicKeyWithoutPrefix, 256, true);
-//        $addressBin = "\x41" . substr($hash, -20);
-        $hash = Keccak::hash(substr($publicKey, 2), 256);
-        $hex = '41' . substr($hash, 24);
+        // Убираем первый байт (04) для хеширования
+        $publicKeyWithoutPrefix = substr($publicKey, 2);
 
-        return $this->base58check($hex);
+        // Конвертируем hex в бинарные данные для Keccak
+        $binaryPublicKey = hex2bin($publicKeyWithoutPrefix);
+
+        // Keccak-256 хеш от бинарных данных публичного ключа
+        $hash = Keccak::hash($binaryPublicKey, 256);
+
+        // Tron добавляет байт 0x41 перед адресом (версия)
+        $hexWithPrefix = '41' . substr($hash, -40);
+
+        return $this->base58check($hexWithPrefix);
     }
 
-    protected function base58check(string $hex): string
+    /**
+     * Base58Check кодирование для Tron адресов
+     *
+     * @param string $hex Адрес с префиксом 41 в hex (например, "41" + 40 hex символов)
+     * @return string Base58Check закодированный адрес (начинается с T)
+     */
+    protected function base58check(string $hex): string  // убрать в Trait Base58Check
     {
+        // 1. Конвертируем hex в бинарные данные
         $bin = hex2bin($hex);
 
-        $checksum = substr( hash('sha256', hash('sha256', $bin, true), true),0,4);
+        // 2. Двойной SHA256 для контрольной суммы
+        $hash1 = hash('sha256', $bin, true);
+        $hash2 = hash('sha256', $hash1, true);
 
-        $bin .= $checksum;
+        // 3. Первые 4 байта - контрольная сумма
+        $checksum = substr($hash2, 0, 4);
 
+        // 4. Добавляем контрольную сумму к исходным данным
+        $binWithChecksum = $bin . $checksum;
+
+        // 5. Base58 кодирование
         $base58 = new Base58();
-
-        return $base58->encode($bin);
+        return $base58->encode($binWithChecksum);
     }
 }

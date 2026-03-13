@@ -2,9 +2,7 @@
 
 namespace App\Services\Wallet;
 
-use App\Models\Network;
-
 interface AddressGeneratorInterface
 {
-    public function generate(Network $network): array;
+    public function generate(string $network): array;
 }
