@@ -13,13 +13,19 @@ return new class extends Migration
     {
         Schema::create('networks', function (Blueprint $table) {
             $table->id();
-            $table->string('name');// Ethereum, Tron, Bitcoin, BSC
-            $table->string('code')->unique();// внутренний код сети
-            $table->string('type');//Тип сети  evm,utxo,account
-            $table->string('chain_id')->nullable();// chain id (например 1 для Ethereum)
-            $table->string('rpc_endpoint')->nullable();// RPC endpoint
-            $table->unsignedInteger('confirmations_required')->default(12);// сколько подтверждений нужно
+            $table->string('name', 100);//(Ethereum, BNB Chain, Tron)');
+            $table->string('code', 20)->unique();//'Код сети для API (ethereum, bsc, tron)');
+            $table->integer('chain_id')->nullable();//Chain ID для EVM сетей (1, 56, 137)');
+            $table->string('native_currency_code', 10);//(ETH, BNB, TRX)');
+            $table->string('native_currency_name', 50)->nullable();//'Название нативной валюты');
+            $table->boolean('is_testnet')->default(false);//'Тестовая сеть или основная');
+            $table->string('explorer_url', 255)->nullable();//('URL блокчейн-эксплорера');
+            $table->string('rpc_url', 255)->nullable();//('RPC URL (опционально, можно хранить в .env)');
+            $table->json('metadata')->nullable();//('Дополнительные данные');
             $table->timestamps();
+
+            $table->index('code');
+            $table->index('is_testnet');
         });
     }
 
