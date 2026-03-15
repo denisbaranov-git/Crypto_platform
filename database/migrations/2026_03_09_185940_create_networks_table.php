@@ -21,6 +21,7 @@ return new class extends Migration
             $table->boolean('is_testnet')->default(false);//'Тестовая сеть или основная');
             $table->string('explorer_url', 255)->nullable();//('URL блокчейн-эксплорера');
             $table->string('rpc_url', 255)->nullable();//('RPC URL (опционально, можно хранить в .env)');
+            $table->string('rpc_driver', 255)->nullable();//(evm, tron, bitcoin);
             $table->json('metadata')->nullable();//('Дополнительные данные');
             $table->timestamps();
 

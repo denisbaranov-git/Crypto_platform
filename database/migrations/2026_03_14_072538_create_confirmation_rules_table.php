@@ -13,7 +13,20 @@ return new class extends Migration
     {
         Schema::create('confirmation_rules', function (Blueprint $table) {
             $table->id();
+            $table->foreignId('currency_network_id')->constrained('currency_networks')->onDelete('cascade');
+
+            $table->decimal('amount_threshold', 40, 18)->nullable()->comment('Порог суммы (NULL = для всех сумм)');
+            $table->enum('confirmation_type', ['blocks', 'finality'])->default('blocks')
+                ->comment('blocks = считать блоки, finality = ждать финализации');
+            $table->integer('confirmations_required')->unsigned();//'Требуемое количество подтверждений');
+            $table->tinyInteger('priority')->default(0)->comment('Приоритет правила (больше = выше)');
+
+            $table->text('description')->nullable();//'Описание правила');
+            $table->boolean('is_active')->default(true);
+
             $table->timestamps();
+
+            $table->index(['network_currency_id', 'amount_threshold', 'priority']);
         });
     }
 

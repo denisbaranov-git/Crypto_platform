@@ -55,7 +55,7 @@ class InitSystemWallet extends Command
             foreach($this->system_wallet_types as $walletType) {
                 $addressData = $this->addressGenerator->generate($network);
 
-                $publicKey = $addressData['public_key'];
+                //$publicKey = $addressData['public_key'];
                 $privateKey = $addressData['private_key'];
                 $address = $addressData['address'];
 

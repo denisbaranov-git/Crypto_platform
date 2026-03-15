@@ -26,10 +26,15 @@ return new class extends Migration
             $table->decimal('min_withdrawal_amount', 40, 18)->default(0)->comment('Минимальная сумма вывода');
             $table->decimal('max_withdrawal_amount', 40, 18)->nullable()->comment('Максимальная сумма вывода (NULL = без ограничений)');
 
-            // Комиссии
+            $table->boolean('use_finality')->default(false)->after('min_confirmations')
+                ->comment('Использовать финализацию вместо подтверждений?');
+            $table->integer('finalization_blocks')->unsigned()->nullable()->after('use_finality')
+                ->comment('Количество блоков до финализации (если use_finality=true)');
+            $table->decimal('finality_threshold', 40, 18)->nullable()->after('finalization_blocks')
+                ->comment('Минимальная сумма для применения финализации');
+            // Комиссии вынесли в fee_rules!!!!!!!!denis
             $table->decimal('withdrawal_fee', 40, 18)->default(0)->comment('Комиссия за вывод');
             $table->enum('withdrawal_fee_type', ['fixed', 'percent'])->default('fixed')->comment('Тип комиссии (фикс/процент)');
-
             // Статусы
             $table->boolean('is_active')->default(true)->comment('Активна ли пара сеть-валюта');
             $table->boolean('is_deposit_enabled')->default(true)->comment('Разрешены ли депозиты');
@@ -41,9 +46,7 @@ return new class extends Migration
 
             $table->timestamps();
 
-            // Уникальность пары сеть-валюта
             $table->unique(['network_id', 'currency_id'], 'unique_network_currency');
-
             // Индексы для поиска
             $table->index('contract_address');
             $table->index('is_active');

@@ -13,15 +13,9 @@ return new class extends Migration
     {
         Schema::create('system_wallets', function (Blueprint $table) {
             $table->id();
-            //id
-            //network_id
-            //type (hot / cold)
-            //address
-            //encrypted_private_key
-            //created_at
             $table->foreignId('network_id');
             $table->string('address');
-            $table->string('type');// тип кошелька hot cold sweep fee
+            $table->string('type');// тип кошелька hot/ cold/ sweep/ fee ...
             $table->string('encrypted_private_key');
             $table->string('status')->default('active'); //статус active disabled
             $table->timestamps();
