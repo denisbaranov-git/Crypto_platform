@@ -16,6 +16,7 @@ return new class extends Migration
             $table->string('name', 100);//(Ethereum, BNB Chain, Tron)');
             $table->string('code', 20)->unique();//'Код сети для API (ethereum, bsc, tron)');
             $table->integer('chain_id')->nullable();//Chain ID для EVM сетей (1, 56, 137)');
+            $table->string('coin_type'); // 60, 60, 60 (BIP44 coin type)
             $table->string('native_currency_code', 10);//(ETH, BNB, TRX)');
             $table->string('native_currency_name', 50)->nullable();//'Название нативной валюты');
             $table->boolean('is_testnet')->default(false);//'Тестовая сеть или основная');

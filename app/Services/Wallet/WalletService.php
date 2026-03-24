@@ -10,6 +10,22 @@ class WalletService
     }
     public function createAddress($user_id, $network)
     {
+    //BEGIN;
+    //    SELECT next_index
+    //    FROM hd_wallets
+    //    WHERE network_id = ?
+    //    FOR UPDATE;
+    //
+    //        index = next_index;
+    //
+    //        UPDATE hd_wallets
+    //    SET next_index = next_index + 1;
+    //COMMIT;
+    //
+    //👉 только после этого:
+    //create wallet_address with index
+
+
         $index = WalletAddress::max('index') + 1;
 
         WalletAddress::create([

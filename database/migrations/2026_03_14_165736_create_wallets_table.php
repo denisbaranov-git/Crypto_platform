@@ -14,29 +14,20 @@ return new class extends Migration
         Schema::create('wallets', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained();
-            $table->foreignId('network_id')->constrained();
-            $table->foreignId('currency_network_id')->constrained('currency_network');
-
-            $table->string('address', 255);
-            //$table->decimal('balance', 40, 18)->default(0);
-            // доступный баланс
-            $table->decimal('available_balance', 40, 18)->default(0);
-            // заблокированный баланс
-            // ордера / вывод
-            $table->decimal('locked_balance', 40, 18)->default(0);
-            $table->decimal('total_balance', 40, 18)->virtualAs('available_balance + locked_balance');
+            //$table->foreignId('network_id')->constrained();// denormalization denis!!!//????
+            $table->foreignId('currency_network_id')->constrained('currency_networks');
+            $table->string('status')->default('active');//active,locked,archived
+            // Следующий индекс для HD-деривации адреса
+            //$table->unsignedBigInteger('next_address_index')->default(0);
+            // Удобный указатель на текущий активный адрес
+            $table->foreignId('active_address_id')->nullable()->constrained('wallet_addresses')->nullOnDelete();
             $table->timestamps();
 
-            // Уникальность адреса в рамках сети
-            $table->unique(['network_id', 'address'], 'unique_address_per_network');
-            // У пользователя только один кошелёк на валюту в сети
-            $table->unique(['user_id', 'network_currency_id'], 'unique_user_currency');
-            // Индексы
-            $table->index('address');
-            $table->index(['user_id', 'network_id']);
+            // Один кошелёк на пользователя в рамках пары сеть+валюта
+            $table->unique(['user_id', 'currency_network_id'], 'unique_user_currency_network');
+            $table->index(['user_id', 'status']);
         });
     }
-
     /**
      * Reverse the migrations.
      */
