@@ -42,11 +42,9 @@ class EloquentUser extends Authenticatable
      *
      * @return array<string, string>
      */
-    protected function casts(): array
-    {
-        return [
-            'email_verified_at' => 'immutable_datetime',
-            'password' => 'hashed',
-        ];
-    }
+
+    protected $casts =  [
+        'email_verified_at' => 'immutable_datetime',
+        'password' => 'hashed',
+    ];
 }

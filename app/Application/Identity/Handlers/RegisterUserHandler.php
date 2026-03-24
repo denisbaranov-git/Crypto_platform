@@ -31,6 +31,10 @@ readonly class RegisterUserHandler
 
         $this->users->save($user);
 
+        foreach ($user->pullEvents() as $event) {
+            event($event);
+        }
+
         return $user;
     }
 }

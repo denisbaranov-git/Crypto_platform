@@ -2,6 +2,7 @@
 
 namespace App\Domain\Identity\Entities;
 
+use App\Domain\Identity\Events\UserRegistered;
 use App\Domain\Identity\ValueObjects\Email;
 use App\Domain\Identity\ValueObjects\PasswordHash;
 use App\Domain\Identity\ValueObjects\UserId;
@@ -15,6 +16,7 @@ class User
     private PasswordHash $password;
     private UserStatus $status;
     private ?\DateTimeImmutable $emailVerifiedAt;
+    private array $events = [];
 
     private function __construct(
         string $name,
@@ -48,7 +50,15 @@ class User
         Email $email,
         PasswordHash $password
     ): self {
-        return new self($name, $email, $password);
+        $user = new self($name, $email, $password);
+
+        $user->record(new UserRegistered(
+            id: $user->id?->value(),
+            email: $user->email->value(),
+            name: $name
+        ));
+
+        return $user;
     }
 
     public function verifyEmail(): void
@@ -77,7 +87,6 @@ class User
         $this->status = UserStatus::BLOCKED;
     }
 
-    // getters
     public function id(): UserId { return $this->id; }
     public function name(): string { return $this->name; }
     public function email(): Email { return $this->email; }
@@ -91,5 +100,17 @@ class User
         }
 
         $this->id = $id;
+    }
+    public function pullEvents(): array
+    {
+        $events = $this->events;
+        $this->events = [];
+
+        return $events;
+    }
+
+    private function record(object $event): void
+    {
+        $this->events[] = $event;
     }
 }

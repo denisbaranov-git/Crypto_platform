@@ -8,6 +8,7 @@ use App\Domain\Identity\Exceptions\InvalidCredentials;
 use App\Domain\Identity\Repositories\UserRepository;
 use App\Domain\Identity\ValueObjects\Email;
 use App\Domain\Identity\ValueObjects\PasswordHash;
+use Illuminate\Contracts\Events\Dispatcher;
 
 readonly class LoginUserHandler
 {
@@ -31,6 +32,11 @@ readonly class LoginUserHandler
 
         if (!$user->canAuthenticate()) {
             throw new InvalidCredentials();
+        }
+
+        foreach ($user->pullEvents() as $event) {
+            //$this->eventDispatcher->dispatch($event);
+            event($event);
         }
 
         return $user;
