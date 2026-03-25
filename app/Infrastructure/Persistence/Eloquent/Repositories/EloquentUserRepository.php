@@ -31,7 +31,16 @@ class EloquentUserRepository implements UserRepository
             $user->assignId(UserId::fromInt($model->id));
         }
     }
+    public function findById(UserId $id): ?User
+    {
+        $model = EloquentUser::find($id->value());
 
+        if (!$model) {
+            return null;
+        }
+
+        return $this->mapper->ToDomain($model);
+    }
     public function findByEmail(Email $email): ?User
     {
         $model = EloquentUser::where('email', $email->value())->first();

@@ -29,7 +29,7 @@ return new class extends Migration
             // баланс после операции
             $table->decimal('balance_after', 40, 18);
             /*  статус  pending,confirmed,cancelled  */
-            $table->string('status')->default('confirmed');
+            $table->string('status')->default('pending');
             $table->json('metadata')->nullable();
             $table->timestamps();
 

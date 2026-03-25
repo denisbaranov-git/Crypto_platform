@@ -5,23 +5,16 @@ namespace App\Http\Controllers;
 use App\Application\Identity\Commands\RegisterUserCommand;
 use App\Application\Identity\Handlers\RegisterUserHandler;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\RegisterRequest;
 use Illuminate\Http\Request;
 
 class UserRegisterController extends Controller
 {
-    public function __construct(
-        private RegisterUserHandler $handler
-    ) {}
-
-    public function __invoke(Request $request)
+    public function __invoke(RegisterRequest $request, RegisterUserHandler $handler)
     {
-        $data = $request->validate([
-            'name' => ['required'],
-            'email' => ['required','email'],
-            'password' => ['required','min:8']
-        ]);
+        $data = $request->validated();
 
-        $user = $this->handler->handle(
+        $user = $handler->handle(
             new RegisterUserCommand(
                 $data['name'],
                 $data['email'],

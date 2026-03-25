@@ -2,16 +2,28 @@
 
 namespace App\Http\Controllers;
 
+use App\Application\Identity\Commands\LoginUserCommand;
+use App\Application\Identity\Handlers\LoginUserHandler;
 use App\Http\Controllers\Controller;
+use App\Http\Requests\LoginRequest;
+use App\Infrastructure\Persistence\Eloquent\Repositories\UserMapper;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class LoginController extends Controller
 {
-    public function login(Request $request)
+    public function __invoke(LoginRequest $request, LoginUserHandler $handler, UserMapper $mapper)
     {
-        $user = $this->loginHandler->handle(...);
+        $data = $request->validated();
 
-        Auth::login($eloquentUser);
+        $user = $handler->handle(
+            new LoginUserCommand(
+                $data['email'],
+                $data['password']
+            )
+        );
+
+        Auth::loginUsingId($user->id()->value());
 
         return redirect('/dashboard');
     }
