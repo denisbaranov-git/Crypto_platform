@@ -1,18 +1,19 @@
 <?php
 
-namespace App\Domain\Identity\ValueObjects;
+namespace App\Domain\Wallet\ValueObjects;
 
-final readonly class UserId
+class CurrencyNetworkId
 {
     private function __construct(private int $id)
     {}
     public static function fromInt(int $id): self
     {
-        if ($id < 0) throw new \InvalidArgumentException('User ID cannot be less than zero');
+        if ($id < 0) throw new \InvalidArgumentException('CurrencyNetwork ID cannot be less than zero');
         return new self($id);
     }
     public function value(): int
     {
         return $this->id;
     }
+
 }
