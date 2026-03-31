@@ -19,7 +19,7 @@ return new class extends Migration
             $table->foreignId('wallet_address_id');
             $table->string('txid');// tx hash
             $table->unsignedInteger('log_index')->nullable();// log index (для EVM)
-            $table->string('from_address')->nullable(); // денормализация !! denis
+            $table->string('from_address')->nullable();
             $table->string('to_address');
             $table->decimal('amount', 40, 18);
             $table->string('block_hash')->nullable();

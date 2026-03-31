@@ -4,7 +4,7 @@ namespace App\Domain\Shared\ValueObject;
 
 use InvalidArgumentException;
 
-class CryptoMoney
+final class CryptoMoney
 {
     public function __construct(
         public readonly string $currency,

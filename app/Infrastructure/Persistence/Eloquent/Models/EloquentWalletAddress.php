@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class EloquentWalletAddress extends Model
 {
-    protected $table =
+    protected $table = 'wallet_addresses';
 //    $table->id();
 //    $table->foreignId('wallet_id')->constrained()->cascadeOnDelete();
 //    $table->foreignId('network_id')->constrained();
@@ -18,6 +18,10 @@ class EloquentWalletAddress extends Model
 //    $table->timestamps();
     protected $fillable = [
         'wallet_id',
+        'network_id',
+        'address',
+        'derivation_index',
+        'status',
         'address',
         'is_active'
     ];

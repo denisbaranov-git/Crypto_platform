@@ -11,11 +11,13 @@ class DerivationPath
         $this->value = $value;
     }
 
-    public static function fromString(string $derivationPath): self
+    public static function fromString(string $value): self
     {
-        $derivationPath = trim($derivationPath);
+        if (!str_starts_with($value, 'm/')) {
+            throw new \InvalidArgumentException('Invalid derivation path');
+        }
 
-        return new self($derivationPath);
+        return new self($value);
     }
 
     public function value(): string

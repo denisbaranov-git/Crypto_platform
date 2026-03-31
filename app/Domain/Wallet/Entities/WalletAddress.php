@@ -11,14 +11,14 @@ class WalletAddress
 {
     private ?WalletAddressId $id = null;
     private WalletAddressValue $address;
-    private DerivationIndex $derivationIndex;
+    private int $derivationIndex;
     private DerivationPath $derivationPath;
     private bool $isActive = true;
     private string $status = 'active';
 
     private function __construct(
         WalletAddressValue $address,
-        DerivationIndex $derivationIndex,
+        int $derivationIndex,
         DerivationPath $derivationPath,
     ) {
         $this->address = $address;
@@ -26,18 +26,15 @@ class WalletAddress
         $this->derivationPath = $derivationPath;
     }
 
-    public static function create(
-        WalletAddressValue $address,
-        DerivationIndex $derivationIndex,
-        DerivationPath $derivationPath
-    ): self {
+    public static function create(WalletAddressValue $address, int $derivationIndex, DerivationPath $derivationPath): self
+    {
         return new self($address, $derivationIndex, $derivationPath);
     }
 
     public static function hydrate(
         WalletAddressId $id,
         WalletAddressValue $address,
-        DerivationIndex $derivationIndex,
+        int $derivationIndex,
         DerivationPath $derivationPath,
         bool $isActive,
         string $status
@@ -60,7 +57,7 @@ class WalletAddress
         return $this->address;
     }
 
-    public function derivationIndex(): DerivationIndex
+    public function derivationIndex(): int
     {
         return $this->derivationIndex;
     }
@@ -73,5 +70,9 @@ class WalletAddress
     public function isActive(): bool
     {
         return $this->isActive;
+    }
+    public function status(): string
+    {
+        return $this->status;
     }
 }

@@ -4,10 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Application\Identity\Commands\LoginUserCommand;
 use App\Application\Identity\Handlers\LoginUserHandler;
-use App\Http\Controllers\Controller;
 use App\Http\Requests\LoginRequest;
-use App\Infrastructure\Persistence\Eloquent\Repositories\UserMapper;
-use Illuminate\Http\Request;
+use App\Infrastructure\Persistence\Eloquent\Mappers\UserMapper;
 use Illuminate\Support\Facades\Auth;
 
 class LoginController extends Controller

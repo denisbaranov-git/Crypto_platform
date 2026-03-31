@@ -16,6 +16,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('wallet_id')->constrained()->cascadeOnDelete();
             $table->foreignId('network_id')->constrained();
+            $table->foreignId('currency_network_id')->constrained('currency_networks');
             $table->string('address', 255);
             $table->unsignedBigInteger('derivation_index');
             $table->string('derivation_path', 255);

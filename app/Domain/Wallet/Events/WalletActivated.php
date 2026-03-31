@@ -2,9 +2,9 @@
 
 namespace App\Domain\Wallet\Events;
 
-final readonly class WalletArchived
+final class WalletActivated
 {
     public function __construct(
-        public readonly int $walletId
+        public int $walletId,
     ) {}
 }

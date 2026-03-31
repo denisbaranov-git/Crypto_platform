@@ -1,11 +1,11 @@
 <?php
 
-namespace App\Infrastructure\Persistence\Eloquent\Repositories;
+namespace App\Infrastructure\Persistence\Eloquent\Mappers;
 
 use App\Domain\Identity\Entities\User;
-use App\Domain\Identity\ValueObjects\UserId;
 use App\Domain\Identity\ValueObjects\Email;
 use App\Domain\Identity\ValueObjects\PasswordHash;
+use App\Domain\Identity\ValueObjects\UserId;
 use App\Domain\Identity\ValueObjects\UserStatus;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentUser;
 

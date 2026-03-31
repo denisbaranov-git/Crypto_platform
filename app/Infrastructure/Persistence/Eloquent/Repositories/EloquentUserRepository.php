@@ -3,10 +3,10 @@
 namespace App\Infrastructure\Persistence\Eloquent\Repositories;
 
 use App\Domain\Identity\Entities\User;
-use App\Domain\Identity\Exceptions\EmailAlreadyExists;
 use App\Domain\Identity\Repositories\UserRepository;
 use App\Domain\Identity\ValueObjects\Email;
 use App\Domain\Identity\ValueObjects\UserId;
+use App\Infrastructure\Persistence\Eloquent\Mappers\UserMapper;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentUser;
 use Illuminate\Database\QueryException;
 

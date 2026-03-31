@@ -21,7 +21,13 @@ class EloquentWallet extends Model
 //$table->foreignId('active_address_id')->nullable()->constrained('wallet_addresses')->nullOnDelete();
 //$table->timestamps();
     protected $fillable = [
-
+        'user_id',
+        'network_id',
+        'currency_network_id',
+        'next_address_index',
+        'status',
+        'next_address_index',
+        'active_address_id'
     ];
 
     public function user(): \Illuminate\Database\Eloquent\Relations\BelongsTo

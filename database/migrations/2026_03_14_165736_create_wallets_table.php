@@ -14,7 +14,6 @@ return new class extends Migration
         Schema::create('wallets', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained();
-            //$table->foreignId('network_id')->constrained();// denormalization denis!!!//????
             $table->foreignId('currency_network_id')->constrained('currency_networks');
             $table->string('status')->default('active');//active,locked,archived
             // Следующий индекс для HD-деривации адреса

@@ -2,7 +2,7 @@
 
 namespace App\Application\Wallet\Handlers;
 
-class SetActiveWalletAddressHandler
+class ActivateWalletAddressHandler
 {
 
 }

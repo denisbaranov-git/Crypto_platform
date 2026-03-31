@@ -13,9 +13,11 @@ class WalletAddressValue
 
     public static function fromString(string $address): self
     {
-        $address = trim($address);
+        if (empty($value)) {
+            throw new \InvalidArgumentException('Invalid address');
+        }
 
-        return new self($address);
+        return new self($value);
     }
 
     public function value(): string

@@ -4,8 +4,13 @@ namespace App\Domain\Wallet\Entities;
 
 use App\Domain\Identity\ValueObjects\UserId;
 use App\Domain\Shared\RecordsDomainEvents;
+use App\Domain\Wallet\Events\WalletActivated;
+use App\Domain\Wallet\Events\WalletAddressActivated;
+use App\Domain\Wallet\Events\WalletAddressIssued;
+use App\Domain\Wallet\Events\WalletArchived;
+use App\Domain\Wallet\Events\WalletLocked;
 use App\Domain\Wallet\ValueObjects\CurrencyNetworkId;
-use App\Domain\Wallet\ValueObjects\DerivationIndex;
+use App\Domain\Wallet\ValueObjects\DerivationPath;
 use App\Domain\Wallet\ValueObjects\WalletAddressId;
 use App\Domain\Wallet\ValueObjects\WalletAddressValue;
 use App\Domain\Wallet\ValueObjects\WalletId;
@@ -56,22 +61,25 @@ final class Wallet
         return $wallet;
     }
 
-    public function createAddress(string $address, int $index, string $path): WalletAddress
+    public function issueAddress(WalletAddressValue $address, int $index, DerivationPath $path): WalletAddress
     {
         if ($this->status !== WalletStatus::ACTIVE) {
             throw new \DomainException('Wallet is not active');
         }
 
         foreach ($this->addresses as $existing) {
-            if ($existing->derivationIndex()->value() === $index) {
+            if ($existing->derivationIndex() === $index) {
                 throw new \DomainException('Derivation index already used in wallet');
+            }
+            if ($existing->address()->equals($address)) {
+                throw new \DomainException('Address already exists');
             }
         }
 
         $walletAddress = WalletAddress::create(
-            address: WalletAddressValue::fromString($address),
-            derivationIndex: DerivationIndex::fromInt($index),
-            derivationPath: DerivationPath::fromString($path),
+            address: $address,
+            derivationIndex: $index,
+            derivationPath:$path,
         );
 
         $this->addresses[] = $walletAddress;
@@ -80,32 +88,43 @@ final class Wallet
             $this->activeAddressId = $walletAddress->id();
         }
 
+        $this->recordDomainEvent(new WalletAddressIssued(
+            $this->id->value(),
+            $walletAddress->address()->value(),
+            $walletAddress->derivationIndex(),
+        ));
+
         return $walletAddress;
     }
 
     public function lock(): void
     {
         $this->status = WalletStatus::LOCKED;
+        $this->recordDomainEvent( new WalletLocked($this->id->value()));
     }
 
     public function archive(): void
     {
         $this->status = WalletStatus::ARCHIVED;
+        $this->recordDomainEvent( new WalletArchived($this->id->value()));
     }
 
     public function activate(): void
     {
         $this->status = WalletStatus::ACTIVE;
-        $this->recordEvent( new WalletActivated($this->id));
+        $this->recordDomainEvent( new WalletActivated($this->id->value()));
     }
 
-    public function setActiveAddress(WalletAddressId $addressId): void
+    public function activateAddress(WalletAddressId $addressId): void
     {
         if (!$this->hasAddress($addressId)) {
             throw new \DomainException('Address does not belong to this wallet');
         }
 
+
         $this->activeAddressId = $addressId;
+
+        $this->recordDomainEvent( new WalletAddressActivated($this->id->value(), $addressId->value()));
     }
 
     private function hasAddress(WalletAddressId $addressId): bool

@@ -5,8 +5,8 @@ namespace App\Domain\Wallet\Events;
 final readonly class WalletCreated
 {
     public function __construct(
-        public readonly string $walletId,
-        public readonly string $userId,
-        public readonly string $currencyNetworkId,
+        public int $walletId,
+        public int $userId,
+        public int $currencyNetworkId,
     ) {}
 }

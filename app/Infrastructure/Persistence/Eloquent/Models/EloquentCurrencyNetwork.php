@@ -6,6 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 
 class EloquentCurrencyNetwork extends Model
 {
-    protected $table =
+    protected $table = 'currency_networks';
     //
 }
