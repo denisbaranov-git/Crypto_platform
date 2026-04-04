@@ -39,6 +39,11 @@ return [
         'web' => [
             'driver' => 'session',
             'provider' => 'users',
+            'model' => App\Infrastructure\Persistence\Eloquent\Models\EloquentUser::class,
+        ],
+        'api' => [
+            'driver' => 'sanctum',
+            'provider' => 'users',
         ],
     ],
 

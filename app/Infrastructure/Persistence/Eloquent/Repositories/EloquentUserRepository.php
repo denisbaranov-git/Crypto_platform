@@ -21,9 +21,6 @@ class EloquentUserRepository implements UserRepository
         try {
             $model->save();
         } catch (QueryException $e) {
-//            if ($this->isUniqueConstraint($e)) {
-//                throw new EmailAlreadyExists();
-//            }
             throw $e;
         }
 

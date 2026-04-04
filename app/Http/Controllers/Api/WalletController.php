@@ -1,80 +1,51 @@
 <?php
-// app/Http/Controllers/Api/WalletController.php
 
 namespace App\Http\Controllers\Api;
 
 use App\Http\Controllers\Controller;
-use App\Jobs\SendWithdrawalJob;
-use App\Rules\SupportedNetwork;
-use App\Services\AccountService;
-use App\Services\Wallet\WalletCreationService;
-use App\Models\Wallet;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 
-class WalletController extends Controller
+final class WalletController extends Controller
 {
-    public function __construct(
-        private AccountService $accountService,
-        private WalletCreationService $walletCreator
-    ) {
-        $this->middleware('auth:sanctum');
+    public function index(Request $request): array
+    {
+        return [
+            'data' => [
+                [
+                    'id' => 1,
+                    'currency_code' => 'USDT',
+                    'network_code' => 'tron',
+                    'available_balance' => '300.000000',
+                    'locked_balance' => '0.000000',
+                    'active_address' => 'TXYZ...',
+                    'status' => 'active',
+                ],
+                [
+                    'id' => 2,
+                    'currency_code' => 'BTC',
+                    'network_code' => 'bitcoin',
+                    'available_balance' => '0.04200000',
+                    'locked_balance' => '0.00000000',
+                    'active_address' => 'bc1q...',
+                    'status' => 'active',
+                ],
+            ],
+        ];
     }
 
-    /**
-     * Получить или создать кошелёк.
-     */
-    public function show(Request $request)
+    public function show(Request $request, string $wallet): array
     {
-        $request->validate(['currency' => 'required|string']);
-
-        $user = Auth::user();
-        $wallet = $user->wallets()->where('currency', $request->currency)->first();
-
-        if (!$wallet) {
-            $wallet = $this->walletCreator->createWallet($user, $request->currency);
-        }
-
-        return response()->json([
-            'currency' => $wallet->currency,
-            'address' => $wallet->address,
-            'balance' => $wallet->balance,
-        ]);
-    }
-
-    /**
-     * Запрос на вывод.
-     */
-    public function withdraw(Request $request)
-    {
-        $request->validate([
-            'currency' => 'required|string',
-            'network' => ['required|string',new SupportedNetwork], //Rule::in(array_keys(config('networks'))),
-            'amount' => 'required|string',
-            'to_address' => 'required|string',
-        ]);
-
-        $wallet = Auth::user()->wallets()
-            ->where('currency', $request->currency)
-            ->where('network',$request->network)
-            ->firstOrFail();
-
-        try {
-            $transaction = $this->accountService->withdraw(
-                $wallet,
-                $request->amount,
-                ['to' => $request->to_address]
-            );
-
-            SendWithdrawalJob::dispatch($transaction);
-
-            return response()->json([
-                'message' => 'Withdrawal created',
-                'transaction_id' => $transaction->id,
-                'status' => $transaction->status,
-            ]);
-        } catch (\RuntimeException $e) {
-            return response()->json(['error' => $e->getMessage()], 400);
-        }
+        return [
+            'id' => $wallet,
+            'currency_code' => 'USDT',
+            'network_code' => 'tron',
+            'available_balance' => '300.000000',
+            'locked_balance' => '0.000000',
+            'active_address' => 'TXYZ...',
+            'addresses' => [
+                ['address' => 'TXYZ...', 'is_active' => true],
+            ],
+            'deposits' => [],
+        ];
     }
 }

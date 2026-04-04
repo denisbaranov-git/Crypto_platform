@@ -14,7 +14,7 @@ use App\Infrastructure\Persistence\Eloquent\Models\EloquentWallet;
 
 class WalletMapper
 {
-    public function toDomain($model, $addresses): Wallet
+    public function toDomain(EloquentWallet $model, array $addresses): Wallet
     {
         $domainAddresses = [];
 

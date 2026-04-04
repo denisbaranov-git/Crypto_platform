@@ -8,14 +8,19 @@ use App\Domain\Identity\Exceptions\EmailAlreadyExists;
 use App\Domain\Identity\Repositories\UserRepository;
 use App\Domain\Identity\ValueObjects\Email;
 use App\Domain\Identity\ValueObjects\PasswordHash;
+use App\Domain\Shared\EventPublisher;
+use App\Infrastructure\Auth\EloquentAuthUserProvider;
+use App\Infrastructure\Persistence\Eloquent\Models\EloquentUser;
 
 readonly class RegisterUserHandler
 {
     public function __construct(
-        private UserRepository $users
+        private UserRepository $users,
+        private EloquentAuthUserProvider $eloquentUserProvider,
+        private EventPublisher $events
     ) {}
 
-    public function handle(RegisterUserCommand $command): User
+    public function handle(RegisterUserCommand $command): EloquentUser
     {
         $email = Email::fromString($command->email);
 
@@ -30,11 +35,10 @@ readonly class RegisterUserHandler
         );
 
         $this->users->save($user);
+        $eloquentUser = $this->eloquentUserProvider->findById($user->id()->value());
 
-        foreach ($user->pullEvents() as $event) {
-            event($event);
-        }
+        $this->events->publish($user->pullDomainEvents());
 
-        return $user;
+        return $eloquentUser;
     }
 }

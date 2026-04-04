@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Domain\Identity\Repositories\UserRepository;
+use App\Infrastructure\Persistence\Eloquent\Repositories\EloquentUserRepository;
 use App\Services\Wallet\AddressGenerator;
 use App\Services\Wallet\AddressGeneratorInterface;
 use App\Services\Wallet\HDAddressGenerator;
@@ -15,6 +17,8 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
+        $this->app->bind(UserRepository::class, EloquentUserRepository::class);
+
         $this->app->bind(AddressGeneratorInterface::class, function ($app) {
             return new AddressGenerator();
         });

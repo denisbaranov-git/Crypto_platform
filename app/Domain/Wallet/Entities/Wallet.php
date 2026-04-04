@@ -8,6 +8,7 @@ use App\Domain\Wallet\Events\WalletActivated;
 use App\Domain\Wallet\Events\WalletAddressActivated;
 use App\Domain\Wallet\Events\WalletAddressIssued;
 use App\Domain\Wallet\Events\WalletArchived;
+use App\Domain\Wallet\Events\WalletCreated;
 use App\Domain\Wallet\Events\WalletLocked;
 use App\Domain\Wallet\ValueObjects\CurrencyNetworkId;
 use App\Domain\Wallet\ValueObjects\DerivationPath;
@@ -41,7 +42,15 @@ final class Wallet
         UserId $userId,
         CurrencyNetworkId $currencyNetworkId
     ): self {
-        return new self($userId, $currencyNetworkId);
+        $wallet = new self($userId, $currencyNetworkId);
+
+        $wallet->recordDomainEvent(new WalletCreated(
+            $wallet->id?->value(),
+            $wallet->userId->value(),
+            $wallet->currencyNetworkId->value(),
+        ));
+
+        return $wallet;
     }
 
     public static function hydrate(
@@ -120,7 +129,6 @@ final class Wallet
         if (!$this->hasAddress($addressId)) {
             throw new \DomainException('Address does not belong to this wallet');
         }
-
 
         $this->activeAddressId = $addressId;
 

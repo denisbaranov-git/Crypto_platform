@@ -13,6 +13,7 @@
         "kornrunner/keccak": "^1.1",
         "kornrunner/secp256k1": "^0.4.0",
         "laravel/framework": "^12.0",
+        "laravel/sanctum": "^4.0",
         "laravel/tinker": "^2.10.1",
         "simplito/elliptic-php": "^1.0",
         "stephenhill/base58": "^2.1"

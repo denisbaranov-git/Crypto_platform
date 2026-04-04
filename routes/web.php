@@ -1,27 +1,15 @@
 <?php
 
-//use App\Http\Controllers\Auth\LoginController;
-//use App\Http\Controllers\Auth\LogoutController;
-//use App\Http\Controllers\Auth\RegisterController;
-use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\LoginController;
-use App\Http\Controllers\LogoutController;
-use App\Http\Controllers\UserRegisterController;
+use App\Http\Controllers\Web\AuthController;
 use Illuminate\Support\Facades\Route;
 
-// Гостевые маршруты
-Route::middleware('guest')->group(function () {
-    Route::inertia('/login', 'Auth/Login')->name('login');
-    Route::post('/login', [LoginController::class]);
+// SPA shell: все не-API маршруты отдаём в Vue приложение.
+// Это позволяет использовать /login, /dashboard, /wallets/1 как нормальные URL.
+Route::view('/{any}', 'app')
+    ->where('any', '^(?!api|sanctum).*$');
 
-    Route::inertia('/register', 'Auth/Register')->name('register');
-    Route::post('/register', [UserRegisterController::class]);
-});
+// Web auth (cookie/session flow для Vue SPA).
 
-// Защищенные маршруты
-Route::middleware('auth')->group(function () {
-    Route::get('/dashboard', [DashboardController::class, 'index'])
-        ->name('dashboard');
-    Route::post('/logout', [LogoutController::class])
-        ->name('logout');
-});
+Route::post('/login', [AuthController::class, 'login'])->name('web.login');
+Route::post('/register', [AuthController::class, 'register'])->name('web.register');
+Route::post('/logout', [AuthController::class, 'logout'])->name('web.logout');

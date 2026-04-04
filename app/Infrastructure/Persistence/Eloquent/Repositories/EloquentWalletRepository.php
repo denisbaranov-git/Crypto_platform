@@ -16,26 +16,11 @@ final class EloquentWalletRepository implements WalletRepository
 {
     public function __construct(private WalletMapper $mapper) {}
 
-
-//    public function save(Wallet $wallet): void;
-//
-//    public function findById(WalletId $id): ?Wallet;
-//
-//    public function getByUserAndCurrencyNetwork(
-//        UserId $userId,
-//        CurrencyNetworkId $currencyNetworkId
-//    ): ?Wallet;
-//
-//    public function existsByUserAndCurrencyNetwork(
-//        UserId $userId,
-//        CurrencyNetworkId $currencyNetworkId
-//    ): bool;
-
     public function findById(WalletId $id): ?Wallet
     {
         $model = EloquentWallet::findOrFail($id);
 
-        return $this->mapper->toDomain($model);
+        return $this->mapper->toDomain($model, $model->addresses);
     }
 
     public function getByUserAndCurrencyNetwork(UserId $userId, CurrencyNetworkId $currencyNetworkId): ?Wallet
@@ -66,6 +51,10 @@ final class EloquentWalletRepository implements WalletRepository
 
             $model = $this->mapper->toModel($wallet, $model);
             $model->save();
+
+            if (!$wallet->id()) {
+                $wallet->assignId(WalletId::fromInt($model->id));
+            }
 
             foreach ($wallet->addresses() as $address) {
                 $addressModel = $address->id()

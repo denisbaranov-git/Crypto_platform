@@ -21,7 +21,7 @@ class UserRegisterController extends Controller
                 $data['password']
             )
         );
-
-        return response()->json(['id' => $user->id()->value()]);
+        return response()->json(['id' => $user->id()->value()], 201);
+        //return response()->json(['id' => $user->id()->value()]);
     }
 }

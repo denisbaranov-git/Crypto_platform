@@ -7,9 +7,11 @@ use App\Domain\Identity\ValueObjects\Email;
 use App\Domain\Identity\ValueObjects\PasswordHash;
 use App\Domain\Identity\ValueObjects\UserId;
 use App\Domain\Identity\ValueObjects\UserStatus;
+use App\Domain\Shared\RecordsDomainEvents;
 
 class User
 {
+    use RecordsDomainEvents;
     private UserId $id;
     private string $name;
     private Email $email;
@@ -52,7 +54,7 @@ class User
     ): self {
         $user = new self($name, $email, $password);
 
-        $user->record(new UserRegistered(
+        $user->recordDomainEvent(new UserRegistered(
             id: $user->id?->value(),
             email: $user->email->value(),
             name: $name
@@ -100,17 +102,5 @@ class User
         }
 
         $this->id = $id;
-    }
-    public function pullEvents(): array
-    {
-        $events = $this->events;
-        $this->events = [];
-
-        return $events;
-    }
-
-    private function record(object $event): void
-    {
-        $this->events[] = $event;
     }
 }
