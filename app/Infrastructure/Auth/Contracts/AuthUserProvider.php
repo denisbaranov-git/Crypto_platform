@@ -7,4 +7,5 @@ use App\Infrastructure\Persistence\Eloquent\Models\EloquentUser;
 interface AuthUserProvider
 {
     public function findByEmail(string $email): ?EloquentUser;
+    public function findById(int $id): ?EloquentUser;
 }

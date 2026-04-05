@@ -9,7 +9,6 @@ Route::view('/{any}', 'app')
     ->where('any', '^(?!api|sanctum).*$');
 
 // Web auth (cookie/session flow для Vue SPA).
-
 Route::post('/login', [AuthController::class, 'login'])->name('web.login');
 Route::post('/register', [AuthController::class, 'register'])->name('web.register');
 Route::post('/logout', [AuthController::class, 'logout'])->name('web.logout');

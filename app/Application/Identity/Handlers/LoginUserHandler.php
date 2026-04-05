@@ -13,6 +13,7 @@ use App\Domain\Shared\EventPublisher;
 use App\Infrastructure\Auth\Contracts\AuthUserProvider;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentUser;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Support\Facades\Hash;
 
 readonly class LoginUserHandler
 {
@@ -30,17 +31,17 @@ readonly class LoginUserHandler
         $user = $this->users->findByEmail($email->value());
 
         if (!$user) {
-            throw new InvalidCredentials();
+            throw new InvalidCredentials("user is $user");
         }
         $password_hash = PasswordHash::fromHash($user->password);
 
         //if (!Hash::check($command->password, $user->password)) {
         if (!$password_hash->verify($command->password)) {
-            throw new InvalidCredentials();
+            throw new InvalidCredentials("password invalid");
         }
 
         if ($user->status !== 'active') {
-            throw new InvalidCredentials();
+            throw new InvalidCredentials("user status is $user->status");
         }
 
 //        if (!$user->verifyPassword($command->password)) {

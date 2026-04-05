@@ -6,6 +6,7 @@
     <title>Crypto Platform</title>
 
     @vite(['resources/js/main.js'])
+    @vite(['resources/css/app.css'])
 </head>
 <body class="bg-slate-950 text-slate-100">
 <div id="app"></div>

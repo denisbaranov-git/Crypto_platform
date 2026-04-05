@@ -20,7 +20,6 @@ final class AuthController extends Controller
     {
         $data = $request->validated();
 
-        /** @var EloquentUser $eloquentUser */
         $eloquentUser = $handler->handle(
             new LoginUserCommand($data['email'], $data['password'])
         );

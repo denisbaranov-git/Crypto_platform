@@ -9,14 +9,14 @@ use App\Domain\Identity\Repositories\UserRepository;
 use App\Domain\Identity\ValueObjects\Email;
 use App\Domain\Identity\ValueObjects\PasswordHash;
 use App\Domain\Shared\EventPublisher;
-use App\Infrastructure\Auth\EloquentAuthUserProvider;
+use App\Infrastructure\Auth\Contracts\AuthUserProvider;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentUser;
 
 readonly class RegisterUserHandler
 {
     public function __construct(
         private UserRepository $users,
-        private EloquentAuthUserProvider $eloquentUserProvider,
+        private AuthUserProvider $eloquentUserProvider,
         private EventPublisher $events
     ) {}
 

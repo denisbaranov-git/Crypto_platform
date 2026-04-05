@@ -18,14 +18,7 @@ Route::prefix('mobile')->group(function () {
 // SPA API endpoints (cookie/session via Sanctum or token if mobile uses these routes).
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', MeController::class)->name('api.me');
-//    Route::get('/me', function () {
-//        return response()->json([
-//            'status' => 'online',
-//            'timestamp' => now()
-//        ]);
-//    });
     Route::get('/dashboard', DashboardController::class)->name('api.dashboard');
-
     Route::get('/wallets', [WalletController::class, 'index'])->name('api.wallets.index');
     Route::get('/wallets/{wallet}', [WalletController::class, 'show'])->name('api.wallets.show');
 });

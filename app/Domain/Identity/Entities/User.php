@@ -12,7 +12,7 @@ use App\Domain\Shared\RecordsDomainEvents;
 class User
 {
     use RecordsDomainEvents;
-    private UserId $id;
+    private ?UserId $id = null;
     private string $name;
     private Email $email;
     private PasswordHash $password;
@@ -55,7 +55,8 @@ class User
         $user = new self($name, $email, $password);
 
         $user->recordDomainEvent(new UserRegistered(
-            id: $user->id?->value(),
+            //id: $user->id?->value(),  //denis
+            id: null,
             email: $user->email->value(),
             name: $name
         ));
@@ -89,7 +90,7 @@ class User
         $this->status = UserStatus::BLOCKED;
     }
 
-    public function id(): UserId { return $this->id; }
+    public function id(): ?UserId { return $this->id; }
     public function name(): string { return $this->name; }
     public function email(): Email { return $this->email; }
     public function password(): PasswordHash { return $this->password; }

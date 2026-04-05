@@ -12,7 +12,6 @@ final class MeController extends Controller
     {
 
         $user = $request->user();
-        if(!$user) throw new AuthorizationException();
 
         return [
             'id' => $user->id,

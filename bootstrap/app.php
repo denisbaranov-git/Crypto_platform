@@ -12,7 +12,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        //$middleware->append(\Illuminate\Http\Middleware\HandleCors::class);//denis
+        //
+    })
+    ->withMiddleware(function (Middleware $middleware): void {
+        $middleware->statefulApi();
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         //

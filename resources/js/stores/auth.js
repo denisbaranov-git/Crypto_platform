@@ -1,18 +1,14 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import * as authApi from '@/api/auth'
-import {http} from "@/api/http.js";
 
 export const useAuthStore = defineStore('auth', () => {
-    // STATE
     const user = ref(null)
     const loading = ref(false)
     const error = ref(null)
 
-    // GETTER: удобная derived-переменная.
     const isAuthenticated = computed(() => user.value !== null)
 
-    // Загружаем текущего пользователя из /api/me.
     async function fetchUser() {
         try {
             const response = await authApi.me()
@@ -22,7 +18,6 @@ export const useAuthStore = defineStore('auth', () => {
         }
     }
 
-    // Web SPA login (cookie/session).
     async function login(email, password) {
         loading.value = true
         error.value = null
@@ -39,20 +34,13 @@ export const useAuthStore = defineStore('auth', () => {
         }
     }
 
-    // Register + auto-login.
     async function register(payload) {
         loading.value = true
         error.value = null
 
         try {
             await authApi.csrfCookie()
-            //await authApi.register(payload)
-            await http.post('/register', {
-                name: 'Test',
-                email: 'test@test.com',
-                password: '123456',
-                password_confirmation: '123456'
-            })
+            await authApi.register(payload)
             await fetchUser()
         } catch (e) {
             error.value = 'Не удалось зарегистрировать пользователя'
@@ -62,7 +50,6 @@ export const useAuthStore = defineStore('auth', () => {
         }
     }
 
-    // Logout web SPA.
     async function logout() {
         await authApi.logout()
         user.value = null
