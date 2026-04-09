@@ -1,8 +1,29 @@
 <?php
 
-use Illuminate\Foundation\Inspiring;
-use Illuminate\Support\Facades\Artisan;
+use App\Infrastructure\Blockchain\Jobs\RefreshDepositConfirmationsJob;
+use App\Infrastructure\Blockchain\Jobs\ScanNetworkBlocksJob;
+use App\Infrastructure\Outbox\Jobs\OutboxRelayJob;
+use App\Models\Network;
+use Illuminate\Support\Facades\Schedule;
 
-Artisan::command('inspire', function () {
-    $this->comment(Inspiring::quote());
-})->purpose('Display an inspiring quote');
+Schedule::call(function () {
+    $networks = Network::query()
+        ->where('is_testnet', false)
+        ->get();
+
+    foreach ($networks as $network) {
+        dispatch(new ScanNetworkBlocksJob($network->id))->onQueue('deposits');
+        dispatch(new RefreshDepositConfirmationsJob($network->id))->onQueue('deposits');
+    }
+
+    dispatch(new OutboxRelayJob(batchSize: 100))->onQueue('outbox');
+})
+    ->everyMinute()
+    ->withoutOverlapping();
+
+//Schedule::job(new ScanNetworkBlocksJob('ethereum'))->everyMinute()->withoutOverlapping();
+//Schedule::job(new ScanNetworkBlocksJob('tron'))->everyMinute()->withoutOverlapping();
+//Schedule::job(new ScanNetworkBlocksJob('bitcoin'))->everyTwoMinutes()->withoutOverlapping();
+//
+//Schedule::job(new RefreshDepositConfirmationsJob())->everyMinute()->withoutOverlapping();
+//Schedule::job(new OutboxRelayJob())->everyMinute()->withoutOverlapping();

@@ -26,7 +26,7 @@ return new class extends Migration
 
             $table->timestamps();
 
-            $table->index(['network_currency_id', 'amount_threshold', 'priority']);
+            $table->index(['currency_network_id', 'amount_threshold', 'priority'], 'idx_confirmation_rules_lookup');
         });
     }
 

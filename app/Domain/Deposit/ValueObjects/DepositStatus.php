@@ -2,12 +2,12 @@
 
 namespace App\Domain\Deposit\ValueObjects;
 
-enum DepositStatus : string
+enum DepositStatus: string
 {
-    case DETECTED = 'detected';
-    case PENDING = 'pending';
-    case CONFIRMED = 'confirmed';
-    case CREDITED = 'credited';
-    case REORGED = 'reorged';
-    case FAILED = 'failed';
+    case Detected = 'detected';
+    case Pending = 'pending';
+    case Confirmed = 'confirmed';
+    case Credited = 'credited';
+    case Failed = 'failed';
+    case Reorged = 'reorged';
 }

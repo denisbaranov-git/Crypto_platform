@@ -2,17 +2,36 @@
 
 namespace App\Domain\Deposit\ValueObjects;
 
-class DepositId
+final class DepositId
 {
-    private function __construct(private int $id)
-    {}
-    public static function fromInt(int $id): self
+    public function __construct(private string $value)
     {
-        if ($id < 0) throw new \InvalidArgumentException('Deposit ID cannot be less than zero');
-        return new self($id);
+        $value = trim($value);
+
+        if ($value === '') {
+            throw new \InvalidArgumentException('DepositId cannot be empty.');
+        }
+
+        $this->value = $value;
     }
-    public function value(): int
+
+    public static function fromString(int|string $value): self
     {
-        return $this->id;
+        return new self((string) $value);
+    }
+
+    public function value(): string
+    {
+        return $this->value;
+    }
+
+    public function equals(self $other): bool
+    {
+        return $this->value === $other->value();
+    }
+
+    public function __toString(): string
+    {
+        return $this->value;
     }
 }

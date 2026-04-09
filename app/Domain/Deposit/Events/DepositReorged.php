@@ -2,13 +2,13 @@
 
 namespace App\Domain\Deposit\Events;
 
-final readonly class DepositReorged
+final class DepositReorged
 {
     public function __construct(
-        public string $depositKey,
-        public int $networkId,
-        public string $txHash,
-        public ?int $oldBlockNumber,
-        public ?string $oldBlockHash,
+        public readonly ?int $depositId,
+        public readonly int $networkId,
+        public readonly string $externalKey,
+        public readonly ?int $oldBlockNumber = null,
+        public readonly ?int $newBlockNumber = null,
     ) {}
 }

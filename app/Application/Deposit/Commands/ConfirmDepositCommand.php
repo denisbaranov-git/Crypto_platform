@@ -2,9 +2,9 @@
 
 namespace App\Application\Deposit\Commands;
 
-class CreateDepositCommand
+final readonly class ConfirmDepositCommand
 {
     public function __construct(
-        public int $depositId,
+        public int $depositId
     ) {}
 }

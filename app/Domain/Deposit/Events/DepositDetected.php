@@ -2,15 +2,13 @@
 
 namespace App\Domain\Deposit\Events;
 
-final readonly class DepositDetected
+final class DepositDetected
 {
     public function __construct(
-        public string $depositKey,
-        public int $networkId,
-        public int $currencyId,
-        public int $userId,
-        public string $txHash,
-        public ?int $logIndex,
-        public string $amount,
+        public readonly ?int $depositId,
+        public readonly int $networkId,
+        public readonly string $externalKey,
+        public readonly string $txid,
+        public readonly string $amount,
     ) {}
 }
