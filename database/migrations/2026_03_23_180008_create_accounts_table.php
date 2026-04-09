@@ -11,14 +11,33 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('accounts', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('user_id');
-            $table->foreignId('currency_id');
-            $table->decimal('balance', 40, 18)->default(0);
-            $table->timestamps();
+        Schema::table('accounts', function (Blueprint $table) {
+            // Универсальный owner: user / system / merchant / partner / future loan
+            $table->string('owner_type', 50)->default('user')->after('id');
+            $table->unsignedBigInteger('owner_id')->after('owner_type');
+            // Для crypto-учёта: USDT ERC20 / USDT TRC20 / BTC / ETH = отдельные балансные единицы
+            $table->foreignId('currency_network_id')
+                ->nullable()
+                ->after('owner_id')
+                ->constrained('currency_networks')
+                ->nullOnDelete();
+            // Быстрый остаток
+            $table->decimal('balance', 40, 18)->default(0)->change();
+            // Быстрый агрегат по всем активным holds
+            $table->decimal('reserved_balance', 40, 18)->default(0)->after('balance');
+            // active / locked / closed
+            $table->string('status', 30)->default('active')->after('reserved_balance');
+            // Защита от гонок при конкурентных обновлениях
+            $table->unsignedBigInteger('version')->default(0)->after('status');
+            $table->json('metadata')->nullable()->after('version');
 
-            $table->unique(['user_id', 'currency_id']);
+            $table->index(['owner_type', 'owner_id'], 'idx_accounts_owner');
+            $table->index(['currency_network_id', 'status'], 'idx_accounts_asset_status');
+
+            $table->unique(
+                ['owner_type', 'owner_id', 'currency_network_id'],
+                'uniq_account_owner_asset'
+            );
         });
     }
 

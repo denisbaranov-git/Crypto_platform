@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('account_transactions', function (Blueprint $table) {
+        Schema::create('ledger_holds', function (Blueprint $table) {
             $table->id();
             $table->uuid('ledger_operation_id');
             $table->foreign('ledger_operation_id')
@@ -24,19 +24,18 @@ return new class extends Migration
             $table->foreignId('currency_network_id')
                 ->constrained('currency_networks')
                 ->cascadeOnDelete();
-            $table->enum('direction', ['debit', 'credit']);
             $table->decimal('amount', 40, 18);
-            $table->decimal('balance_before', 40, 18);
-            $table->decimal('balance_after', 40, 18);
-            $table->string('reference_type', 100)->nullable();
-            $table->unsignedBigInteger('reference_id')->nullable();
-            $table->string('status', 30)->default('confirmed'); // confirmed | cancelled | reversed
+            $table->string('status', 30)->default('active'); // active | released | consumed | expired
+            $table->string('reason', 50)->nullable(); // withdrawal | aml | dispute | collateral | manual
+            $table->timestamp('expires_at')->nullable();
+            $table->timestamp('released_at')->nullable();
+            $table->timestamp('consumed_at')->nullable();
             $table->json('metadata')->nullable();
             $table->timestamps();
 
-            $table->index(['account_id', 'created_at'], 'idx_account_transactions_account_created');
-            $table->index(['ledger_operation_id'], 'idx_account_transactions_operation');
-            $table->index(['reference_type', 'reference_id'], 'idx_account_transactions_reference');
+            $table->index(['account_id', 'status'], 'idx_ledger_holds_account_status');
+            $table->index(['ledger_operation_id'], 'idx_ledger_holds_operation');
+            $table->index(['expires_at', 'status'], 'idx_ledger_holds_expiry');
         });
     }
 
@@ -45,6 +44,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('account_transactions');
+        Schema::dropIfExists('ledger_holds');
     }
 };

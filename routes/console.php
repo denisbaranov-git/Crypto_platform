@@ -19,6 +19,7 @@ Schedule::call(function () {
     dispatch(new OutboxRelayJob(batchSize: 100))->onQueue('outbox');
 })
     ->everyMinute()
+    ->name('process-deposits-and-outbox')
     ->withoutOverlapping();
 
 //Schedule::job(new ScanNetworkBlocksJob('ethereum'))->everyMinute()->withoutOverlapping();

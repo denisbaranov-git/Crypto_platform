@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Infrastructure\Persistence\Eloquent\Repositories;
+namespace App\Infrastructure\Persistence\Eloquent\Deposit\Repositories;
 
 use App\Domain\Deposit\Entities\Deposit;
 use App\Domain\Deposit\Repositories\DepositRepository;

@@ -1,7 +1,7 @@
 <?php
 
 //namespace App\Infrastructure\Deposit;
-namespace App\Infrastructure\Persistence\Eloquent\Repositories;
+namespace App\Infrastructure\Persistence\Eloquent\Deposit\Repositories;
 
 use App\Domain\Deposit\Services\DepositUniquenessChecker;
 use App\Domain\Deposit\ValueObjects\ExternalKey;
