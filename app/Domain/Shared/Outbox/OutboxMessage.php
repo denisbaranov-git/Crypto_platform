@@ -25,7 +25,7 @@ final readonly class OutboxMessage
             aggregateType: $aggregateType,
             aggregateId: $aggregateId,
             eventType: $event::class,
-            payload: json_decode(json_encode($event, JSON_THROW_ON_ERROR), true, 512, JSON_THROW_ON_ERROR),
+            payload: json_decode(json_encode($event, JSON_THROW_ON_ERROR), true, 512, JSON_THROW_ON_ERROR), // convert to Array. true - is array
             availableAt: $availableAt,
         );
     }

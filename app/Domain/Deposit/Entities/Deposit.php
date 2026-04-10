@@ -15,6 +15,7 @@ use App\Domain\Deposit\ValueObjects\DepositId;
 use App\Domain\Deposit\ValueObjects\DepositStatus;
 use App\Domain\Deposit\ValueObjects\ExternalKey;
 use App\Domain\Deposit\ValueObjects\TransactionHash;
+use App\Domain\Shared\RecordsDomainEvents;
 
 /**
  * Deposit — aggregate root.
@@ -24,6 +25,7 @@ use App\Domain\Deposit\ValueObjects\TransactionHash;
  */
 final class Deposit
 {
+    use RecordsDomainEvents;
     /** @var array<object> */
     private array $domainEvents = [];
 
@@ -88,7 +90,7 @@ final class Deposit
             metadata: $metadata,
         );
 
-        $deposit->record(new DepositDetected(
+        $deposit->recordDomainEvent(new DepositDetected(
             depositId: null,
             networkId: $networkId,
             externalKey: $externalKey->value(),
@@ -158,26 +160,23 @@ final class Deposit
         $this->id = $id;
     }
 
-    /**
-     * Обновляет on-chain evidence без ломания инвариантов.
-     * Нормально вызывается scanner/webhook adapter'ом.
-     */
-    public function syncEvidence(
-        ?string $fromAddress = null,
-        ?string $toAddress = null,
+
+    public function updateConfirmations(
+//        ?string $fromAddress = null,
+//        ?string $toAddress = null,
         ?string $blockHash = null,
         ?BlockNumber $blockNumber = null,
         ?int $confirmations = null,
         ?\DateTimeImmutable $finalizedAt = null,
         ?array $metadata = null
     ): void {
-        if ($fromAddress !== null) {
-            $this->fromAddress = $fromAddress;
-        }
-
-        if ($toAddress !== null) {
-            $this->toAddress = $toAddress;
-        }
+//        if ($fromAddress !== null) {
+//            $this->fromAddress = $fromAddress;
+//        }
+//
+//        if ($toAddress !== null) {
+//            $this->toAddress = $toAddress;
+//        }
 
         if ($blockHash !== null) {
             $this->blockHash = $blockHash;
@@ -226,7 +225,7 @@ final class Deposit
         $this->status = DepositStatus::Confirmed;
         $this->confirmedAt = new \DateTimeImmutable();
 
-        $this->record(new DepositConfirmed(
+        $this->recordDomainEvent(new DepositConfirmed(
             depositId: $this->id?->value(),
             networkId: $this->networkId,
             externalKey: $this->externalKey->value(),
@@ -247,7 +246,7 @@ final class Deposit
         $this->status = DepositStatus::Credited;
         $this->creditedAt = new \DateTimeImmutable();
 
-        $this->record(new DepositCredited(
+        $this->recordDomainEvent(new DepositCredited(
             depositId: $this->id?->value(),
             networkId: $this->networkId,
             externalKey: $this->externalKey->value(),
@@ -269,7 +268,7 @@ final class Deposit
         $this->confirmations = 0;
         $this->finalizedAt = null;
 
-        $this->record(new DepositReorged(
+        $this->recordDomainEvent(new DepositReorged(
             depositId: $this->id?->value(),
             networkId: $this->networkId,
             externalKey: $this->externalKey->value(),
@@ -284,7 +283,7 @@ final class Deposit
         $this->failedAt = new \DateTimeImmutable();
         $this->failureReason = $reason;
 
-        $this->record(new DepositFailed(
+        $this->recordDomainEvent(new DepositFailed(
             depositId: $this->id?->value(),
             networkId: $this->networkId,
             externalKey: $this->externalKey->value(),
@@ -325,19 +324,6 @@ final class Deposit
     public function isCredited(): bool
     {
         return $this->status === DepositStatus::Credited;
-    }
-
-    public function pullDomainEvents(): array
-    {
-        $events = $this->domainEvents;
-        $this->domainEvents = [];
-
-        return $events;
-    }
-
-    private function record(object $event): void
-    {
-        $this->domainEvents[] = $event;
     }
 
     public function id(): ?DepositId { return $this->id; }

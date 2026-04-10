@@ -47,7 +47,7 @@ final class OutboxRelayJob implements ShouldQueue
 
                 $outbox->markDispatched($message->idempotency_key);
             } catch (Throwable $e) {
-                $outbox->markFailed($message->idempotency_key, $e->getMessage());
+                $outbox->markFailed($message->idempotency_key, $e->getMessage()); // denis //here need extra actions
             }
         }
     }

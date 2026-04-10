@@ -3,6 +3,7 @@
 namespace App\Application\Deposit\Handlers;
 
 use App\Application\Deposit\Commands\ConfirmDepositCommand;
+use App\Domain\Deposit\Events\DepositConfirmed;
 use App\Domain\Deposit\Repositories\DepositRepository;
 use App\Domain\Deposit\ValueObjects\DepositId;
 use App\Domain\Deposit\ValueObjects\DepositStatus;
@@ -33,7 +34,11 @@ final class ConfirmDepositHandler
             $deposit->markConfirmed();
             $deposit = $this->deposits->save($deposit);
 
+
             foreach ($deposit->pullDomainEvents() as $event) {
+                if (! $event instanceof DepositConfirmed) {
+                    continue;
+                }
                 $this->outbox->append(OutboxMessage::fromDomainEvent(
                     aggregateType: 'deposit',
                     aggregateId: $deposit->id()->value(),

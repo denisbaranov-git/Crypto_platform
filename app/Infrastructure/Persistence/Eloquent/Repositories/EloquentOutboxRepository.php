@@ -30,12 +30,12 @@ final class EloquentOutboxRepository implements OutboxRepository
                 ->where('status', 'pending')
                 ->where(function ($q) {
                     $q->whereNull('available_at')->orWhere('available_at', '<=', now());
-                })
+                }) // AND (`available_at` IS NULL OR `available_at` <= NOW())
                 ->orderBy('id')
                 ->limit($limit)
-                ->lockForUpdate()
+                ->lockForUpdate() // lock for update selected record
                 ->get()
-                ->all();
+                ->all(); // to array
         });
     }
 

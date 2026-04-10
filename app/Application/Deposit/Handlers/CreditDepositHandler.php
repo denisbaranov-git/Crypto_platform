@@ -34,6 +34,7 @@ final class CreditDepositHandler
             }
 
             $this->ledgerService->postDepositCredit(
+                depositId: $deposit->id()->value(),
                 userId: $deposit->userId(),
                 currencyId: $deposit->currencyId(),
                 amount: $deposit->amount(),

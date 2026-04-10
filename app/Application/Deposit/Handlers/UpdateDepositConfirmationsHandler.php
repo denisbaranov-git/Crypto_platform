@@ -32,9 +32,9 @@ final class UpdateDepositConfirmationsHandler
                 return;
             }
 
-            $deposit->syncEvidence(
-                fromAddress: $command->fromAddress,
-                toAddress: $command->toAddress,
+            $deposit->updateConfirmations(
+//                fromAddress: $command->fromAddress,
+//                toAddress: $command->toAddress,
                 blockHash: $command->blockHash,
                 blockNumber: $command->blockNumber !== null ? new BlockNumber($command->blockNumber) : null,
                 confirmations: $command->confirmations,
@@ -48,7 +48,6 @@ final class UpdateDepositConfirmationsHandler
                 $deposit->currencyNetworkId(),
                 $deposit->amount()
             );
-
             if ($this->canBeCreditedPolicy->canBeCredited($deposit, $requirement)) {
                 $this->confirmDepositHandler->handle(
                     new ConfirmDepositCommand($deposit->id()->value())
