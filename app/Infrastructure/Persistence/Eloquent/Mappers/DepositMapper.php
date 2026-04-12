@@ -13,10 +13,57 @@ final class DepositMapper
 {
     public function toEntity(EloquentDeposit $model): Deposit
     {
+//        Нужно сохранить и читать новые поля:
+//
+//        credited_operation_id
+//        reversal_operation_id
+//        reorged_at
+//        reversed_at
+//        reorg_reason
+//        reversal_reason
+//        reorg_block_number
+//        reversal_attempts
+//        reversal_last_error
+//        reversal_failed_at
+        error //denis
+
+ //public static function hydrate(
+//        int $id,
+//        int $userId,
+//        int $networkId,
+//        int $currencyNetworkId,
+//        int $walletAddressId,
+//        ExternalKey $externalKey,
+//        TransactionHash $txid,
+//        string $amount,
+//        string $toAddress,
+//        DepositStatus $status,
+//        ?string $fromAddress = null,
+//        ?string $blockHash = null,
+//        ?BlockNumber $blockNumber = null,
+//        int $confirmations = 0,
+//        ?\DateTimeImmutable $detectedAt = null,
+//        ?\DateTimeImmutable $confirmedAt = null,
+//        ?\DateTimeImmutable $creditedAt = null,
+//        ?\DateTimeImmutable $finalizedAt = null,
+//        ?\DateTimeImmutable $failedAt = null,
+//        ?string $failureReason = null,
+//        array $metadata = [],
+//        // Ledger lifecycle
+//        ?string $creditedOperationId = null,
+//        ?string $reversalOperationId = null,
+//        ?\DateTimeImmutable $reorgedAt = null,
+//        ?\DateTimeImmutable $reversedAt = null,
+//        ?string $reorgReason = null,
+//        ?string $reversalReason = null,
+//        ?int $reorgBlockNumber = null,
+//        int $reversalAttempts = 0,
+//        ?string $reversalLastError = null,
+//        ?\DateTimeImmutable $reversalFailedAt = null,
+
         return Deposit::hydrate(
             id: (int) $model->id,
             userId: (int) $model->user_id,
-            currencyId: (int) $model->currency_id,
             networkId: (int) $model->network_id,
             currencyNetworkId: (int) $model->currency_network_id,
             walletAddressId: (int) $model->wallet_address_id,
@@ -44,7 +91,7 @@ final class DepositMapper
         $model = $model ?? new EloquentDeposit();
 
         $model->user_id = $deposit->userId();
-        $model->currency_id = $deposit->currencyId();
+        //$model->currency_id = $deposit->currencyId();
         $model->network_id = $deposit->networkId();
         $model->currency_network_id = $deposit->currencyNetworkId();
         $model->wallet_address_id = $deposit->walletAddressId();

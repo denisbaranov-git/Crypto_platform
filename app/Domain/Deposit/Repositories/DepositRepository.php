@@ -28,4 +28,5 @@ interface DepositRepository
      * @return Deposit[]
      */
     public function findByNetworkAndBlockNumberGreaterThan(int $networkId, int $blockNumber): array;
+    public function findByNetworkAndBlockNumberBetween( int $networkId, int $rewindTo, int $oldLastProcessedBlock): array;
 }

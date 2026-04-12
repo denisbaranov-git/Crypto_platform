@@ -33,7 +33,7 @@ return new class extends Migration
 
             $table->index(['owner_type', 'owner_id'], 'idx_accounts_owner');
             $table->index(['currency_network_id', 'status'], 'idx_accounts_asset_status');
-
+            //unique index на (owner_type, owner_id, currency_network_id)
             $table->unique(
                 ['owner_type', 'owner_id', 'currency_network_id'],
                 'uniq_account_owner_asset'

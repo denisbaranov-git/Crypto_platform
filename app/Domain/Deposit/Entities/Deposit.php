@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Domain\Deposit\Entities;
 
 use App\Domain\Deposit\Events\DepositConfirmed;
@@ -17,22 +19,16 @@ use App\Domain\Deposit\ValueObjects\ExternalKey;
 use App\Domain\Deposit\ValueObjects\TransactionHash;
 use App\Domain\Shared\RecordsDomainEvents;
 
-/**
- * Deposit — aggregate root.
- *
- * Снаружи никто не должен менять его поля напрямую.
- * Все изменения идут через методы, которые защищают инварианты.
- */
 final class Deposit
 {
     use RecordsDomainEvents;
+
     /** @var array<object> */
     private array $domainEvents = [];
 
     private function __construct(
         private ?DepositId $id,
         private int $userId,
-        private int $currencyId,
         private int $networkId,
         private int $currencyNetworkId,
         private int $walletAddressId,
@@ -52,11 +48,25 @@ final class Deposit
         private ?\DateTimeImmutable $failedAt = null,
         private ?string $failureReason = null,
         private array $metadata = [],
-    ) {}
+        // ledger linkage
+        private ?string $creditedOperationId = null,
+        private ?string $reversalOperationId = null,
+        //reorg lifecycle
+        private ?\DateTimeImmutable $reorgedAt = null,
+        private ?\DateTimeImmutable $reversedAt = null,
+        private ?string $reorgReason = null,
+        private ?string $reversalReason = null,
+        private ?int $reorgBlockNumber = null,
+        //retry/incident tracking for reversal
+        private int $reversalAttempts = 0,
+        private ?string $reversalLastError = null,
+        private ?\DateTimeImmutable $reversalFailedAt = null,
+    ) {
+        $this->assertInvariant();
+    }
 
     public static function detect(
         int $userId,
-        int $currencyId,
         int $networkId,
         int $currencyNetworkId,
         int $walletAddressId,
@@ -73,7 +83,6 @@ final class Deposit
         $deposit = new self(
             id: null,
             userId: $userId,
-            currencyId: $currencyId,
             networkId: $networkId,
             currencyNetworkId: $currencyNetworkId,
             walletAddressId: $walletAddressId,
@@ -104,7 +113,6 @@ final class Deposit
     public static function hydrate(
         int $id,
         int $userId,
-        int $currencyId,
         int $networkId,
         int $currencyNetworkId,
         int $walletAddressId,
@@ -124,11 +132,21 @@ final class Deposit
         ?\DateTimeImmutable $failedAt = null,
         ?string $failureReason = null,
         array $metadata = [],
+        // Ledger lifecycle
+        ?string $creditedOperationId = null,
+        ?string $reversalOperationId = null,
+        ?\DateTimeImmutable $reorgedAt = null,
+        ?\DateTimeImmutable $reversedAt = null,
+        ?string $reorgReason = null,
+        ?string $reversalReason = null,
+        ?int $reorgBlockNumber = null,
+        int $reversalAttempts = 0,
+        ?string $reversalLastError = null,
+        ?\DateTimeImmutable $reversalFailedAt = null,
     ): self {
         return new self(
-            id: new DepositId($id),
+            id: DepositId::fromString($id),
             userId: $userId,
-            currencyId: $currencyId,
             networkId: $networkId,
             currencyNetworkId: $currencyNetworkId,
             walletAddressId: $walletAddressId,
@@ -148,6 +166,16 @@ final class Deposit
             failedAt: $failedAt,
             failureReason: $failureReason,
             metadata: $metadata,
+            creditedOperationId: $creditedOperationId,
+            reversalOperationId: $reversalOperationId,
+            reorgedAt: $reorgedAt,
+            reversedAt: $reversedAt,
+            reorgReason: $reorgReason,
+            reversalReason: $reversalReason,
+            reorgBlockNumber: $reorgBlockNumber,
+            reversalAttempts: $reversalAttempts,
+            reversalLastError: $reversalLastError,
+            reversalFailedAt: $reversalFailedAt,
         );
     }
 
@@ -160,24 +188,19 @@ final class Deposit
         $this->id = $id;
     }
 
-
+    /**
+     * updateConfirmations:
+     * - подтверждения можно обновлять и после reorg, когда депозит был найден заново;
+     * - confirmations не уменьшаются;
+     * - metadata
+     */
     public function updateConfirmations(
-//        ?string $fromAddress = null,
-//        ?string $toAddress = null,
         ?string $blockHash = null,
         ?BlockNumber $blockNumber = null,
         ?int $confirmations = null,
         ?\DateTimeImmutable $finalizedAt = null,
         ?array $metadata = null
     ): void {
-//        if ($fromAddress !== null) {
-//            $this->fromAddress = $fromAddress;
-//        }
-//
-//        if ($toAddress !== null) {
-//            $this->toAddress = $toAddress;
-//        }
-
         if ($blockHash !== null) {
             $this->blockHash = $blockHash;
         }
@@ -201,7 +224,8 @@ final class Deposit
 
     public function markPending(): void
     {
-        if ($this->status === DepositStatus::Credited) {
+        // нельзя уводить из terminal states.
+        if (in_array($this->status, [DepositStatus::Credited, DepositStatus::Reversed, DepositStatus::Failed], true)) {
             throw new InvalidDepositTransition($this->status->value, DepositStatus::Pending->value);
         }
 
@@ -210,7 +234,8 @@ final class Deposit
 
     public function markConfirmed(): void
     {
-        if ($this->status === DepositStatus::Credited) {
+        //запрещаем подтверждать terminal states.
+        if (in_array($this->status, [DepositStatus::Credited, DepositStatus::Reversed, DepositStatus::Failed], true)) {
             throw new InvalidDepositTransition($this->status->value, DepositStatus::Confirmed->value);
         }
 
@@ -246,6 +271,9 @@ final class Deposit
         $this->status = DepositStatus::Credited;
         $this->creditedAt = new \DateTimeImmutable();
 
+        // DepositCredited + фиксируем ещё и связь с ledger operation.
+        $this->creditedOperationId = $operationId;
+
         $this->recordDomainEvent(new DepositCredited(
             depositId: $this->id?->value(),
             networkId: $this->networkId,
@@ -259,26 +287,76 @@ final class Deposit
         $this->finalizedAt = new \DateTimeImmutable();
     }
 
-    public function markReorged(?BlockNumber $newBlockNumber = null): void
-    {
+    /**
+     * - reorg фиксируется как отдельный lifecycle state;
+     * - сохраняем причину reorg;
+     * - сохраняем rewind target;
+     * - очищаем текущие on-chain признаки;
+     * - НЕ удаляем creditedAt/confirmedAt — это история;
+     * - reorged deposit не означает reversed deposit.
+     *
+     * - если deposit уже credited, этот метод только помечает его как reorged;
+     * - reversal позже делает LedgerService.
+     */
+    public function markReorged(
+        ?BlockNumber $rewindToBlock = null,
+        ?string $reason = 'blockchain_reorg'
+    ): void {
         $oldBlock = $this->blockNumber?->value();
 
+        // Reorged статус + metadata о реорге.
         $this->status = DepositStatus::Reorged;
-        $this->blockNumber = $newBlockNumber;
+        $this->reorgedAt = new \DateTimeImmutable();
+        $this->reorgReason = $reason;
+        $this->reorgBlockNumber = $rewindToBlock?->value();
+
+        // СБРОС текущих on-chain индикаторов, потому что chain state был откатан.
+        $this->blockHash = null;
+        $this->blockNumber = null;
         $this->confirmations = 0;
         $this->finalizedAt = null;
+
+        // creditedAt НЕ трогаем: это факт, что ledger когда-то кредитовал.
+        // Его потом компенсирует reversal.
 
         $this->recordDomainEvent(new DepositReorged(
             depositId: $this->id?->value(),
             networkId: $this->networkId,
             externalKey: $this->externalKey->value(),
             oldBlockNumber: $oldBlock,
-            newBlockNumber: $newBlockNumber?->value(),
+            newBlockNumber: $rewindToBlock?->value(),
         ));
+    }
+
+
+    public function markReversed(string $operationId, ?string $reason = 'deposit_reversal'): void
+    {
+        if (! in_array($this->status, [DepositStatus::Reorged, DepositStatus::Credited], true)) {
+            throw new InvalidDepositTransition($this->status->value, DepositStatus::Reversed->value);
+        }
+
+        $this->status = DepositStatus::Reversed;
+        $this->reversedAt = new \DateTimeImmutable();
+        $this->reversalOperationId = $operationId;
+        $this->reversalReason = $reason;
+    }
+
+    public function markReversalFailed(string $error): void
+    {
+        $this->reversalAttempts++;
+        $this->reversalLastError = $error;
+        $this->reversalFailedAt = new \DateTimeImmutable();
+
+        // Можно оставить статус Reorged и просто копить retry,
+        $this->status = DepositStatus::ReversalFailed;
     }
 
     public function markFailed(string $reason): void
     {
+        if ($this->status === DepositStatus::Credited) {
+            throw new InvalidDepositTransition($this->status->value, DepositStatus::Failed->value);
+        }
+
         $this->status = DepositStatus::Failed;
         $this->failedAt = new \DateTimeImmutable();
         $this->failureReason = $reason;
@@ -296,10 +374,20 @@ final class Deposit
      * - confirmed
      * - enough confirmations or finality
      * - not already credited
+     *
+     * - reorg/reversal states не допускаются в кредит;
+     * - terminal reversal states тоже запрещены.
      */
     public function canBeCredited(ConfirmationRequirement $requirement): bool
     {
-        if ($this->status === DepositStatus::Credited || $this->status === DepositStatus::Failed) {
+        if (
+            in_array($this->status, [
+                DepositStatus::Credited,
+                DepositStatus::Failed,
+                DepositStatus::Reversed,
+                DepositStatus::ReversalFailed,
+            ], true)
+        ) {
             return false;
         }
 
@@ -318,7 +406,12 @@ final class Deposit
 
     public function isOpen(): bool
     {
-        return in_array($this->status, [DepositStatus::Detected, DepositStatus::Pending, DepositStatus::Confirmed], true);
+        // reorged/reversed/reversal_failed — уже не open.
+        return in_array(
+            $this->status,
+            [DepositStatus::Detected, DepositStatus::Pending, DepositStatus::Confirmed],
+            true
+        );
     }
 
     public function isCredited(): bool
@@ -326,9 +419,18 @@ final class Deposit
         return $this->status === DepositStatus::Credited;
     }
 
+    /**
+     * Удобная проверка для recovery/reversal workflow.
+     */
+    public function needsReversal(): bool
+    {
+        return $this->status === DepositStatus::Reorged
+            && $this->creditedOperationId !== null
+            && $this->reversalOperationId === null;
+    }
+
     public function id(): ?DepositId { return $this->id; }
     public function userId(): int { return $this->userId; }
-    public function currencyId(): int { return $this->currencyId; }
     public function networkId(): int { return $this->networkId; }
     public function currencyNetworkId(): int { return $this->currencyNetworkId; }
     public function walletAddressId(): int { return $this->walletAddressId; }
@@ -348,4 +450,23 @@ final class Deposit
     public function failedAt(): ?\DateTimeImmutable { return $this->failedAt; }
     public function failureReason(): ?string { return $this->failureReason; }
     public function metadata(): array { return $this->metadata; }
+
+    public function creditedOperationId(): ?string { return $this->creditedOperationId; }
+    public function reversalOperationId(): ?string { return $this->reversalOperationId; }
+    public function reorgedAt(): ?\DateTimeImmutable { return $this->reorgedAt; }
+    public function reversedAt(): ?\DateTimeImmutable { return $this->reversedAt; }
+    public function reorgReason(): ?string { return $this->reorgReason; }
+    public function reversalReason(): ?string { return $this->reversalReason; }
+    public function reorgBlockNumber(): ?int { return $this->reorgBlockNumber; }
+    public function reversalAttempts(): int { return $this->reversalAttempts; }
+    public function reversalLastError(): ?string { return $this->reversalLastError; }
+    public function reversalFailedAt(): ?\DateTimeImmutable { return $this->reversalFailedAt; }
+
+    private function assertInvariant(): void
+    {
+        //amount всегда положительный decimal-string
+        if (! is_numeric($this->amount) || bccomp($this->amount, '0', 18) < 0) {
+            throw new \DomainException('Deposit amount must be a non-negative numeric string.');
+        }
+    }
 }

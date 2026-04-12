@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
 
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('currency_id')->constrained()->cascadeOnDelete();
+            //$table->foreignId('currency_id')->constrained()->cascadeOnDelete();
             $table->foreignId('network_id')->constrained()->cascadeOnDelete();
             $table->foreignId('currency_network_id')->constrained('currency_networks')->cascadeOnDelete();
             $table->foreignId('wallet_address_id')->constrained('wallet_addresses')->cascadeOnDelete();
@@ -49,6 +49,35 @@ return new class extends Migration
             $table->timestamp('finalized_at')->nullable();
             $table->timestamp('failed_at')->nullable();
 
+            ////////////////////////////////////////////////
+            /**
+             * Operation IDs.
+             * Один депозит может быть credited один раз и reversed один раз.
+             */
+            $table->string('credited_operation_id', 120)->nullable();
+            $table->string('reversal_operation_id', 120)->nullable();
+            /**
+             * Reorg lifecycle.
+             */
+            $table->timestamp('reorged_at')->nullable();
+            $table->timestamp('reversed_at')->nullable();
+            /**
+             * Причины.
+             */
+            $table->string('reorg_reason', 100)->nullable();
+            $table->string('reversal_reason', 100)->nullable();
+            /**
+             * Для расследования reorg.
+             */
+            $table->unsignedBigInteger('reorg_block_number');
+            /**
+             * Если reversal не удался сразу.
+             */
+            $table->unsignedInteger('reversal_attempts')->default(0)->after('reorg_block_number');
+            $table->text('reversal_last_error')->nullable()->after('reversal_attempts');
+            $table->timestamp('reversal_failed_at')->nullable()->after('reversal_last_error');
+            /// ////////////////////////////////////////////
+
             $table->string('failure_reason')->nullable();
             $table->json('metadata')->nullable();
 
@@ -58,6 +87,10 @@ return new class extends Migration
             $table->index(['network_id', 'status']);
             $table->index(['wallet_address_id', 'status']);
             $table->index(['network_id', 'block_number']);
+
+            $table->index('credited_operation_id', 'idx_deposits_credited_operation');
+            $table->index('reversal_operation_id', 'idx_deposits_reversal_operation');
+            $table->index(['network_id', 'status', 'block_number'], 'idx_deposits_network_status_block');
         });
     }
 

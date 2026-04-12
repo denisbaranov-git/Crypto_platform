@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Models;
+namespace App\Infrastructure\Persistence\Eloquent\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class AccountTransaction extends Model
+class EloquentAccountTransaction extends Model
 {
-    //
+    protected $table = 'account_transactions';
 }

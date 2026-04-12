@@ -10,4 +10,6 @@ enum DepositStatus: string
     case Credited = 'credited';
     case Failed = 'failed';
     case Reorged = 'reorged';
+    case Reversed = 'reversed';
+    case ReversalFailed = 'reversal_failed';
 }

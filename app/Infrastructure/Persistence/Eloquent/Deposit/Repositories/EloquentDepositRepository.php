@@ -84,4 +84,15 @@ final class EloquentDepositRepository implements DepositRepository
 
         return $rows->map(fn (EloquentDeposit $row) => $this->mapper->toEntity($row))->all();
     }
+    public function findByNetworkAndBlockNumberBetween( int $networkId, int $rewindTo, int $oldLastProcessedBlock): array
+    {
+            $rows = EloquentDeposit::query()
+            ->where('network_id', $networkId)
+            ->whereNotNull('block_number')
+            ->whereBetween('block_number', [$rewindTo, $oldLastProcessedBlock])
+            ->orderBy('block_number')
+            ->get();
+
+        return $rows->map(fn (EloquentDeposit $row) => $this->mapper->toEntity($row))->all();
+    }
 }
