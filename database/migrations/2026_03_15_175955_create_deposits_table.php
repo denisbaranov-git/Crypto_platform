@@ -13,43 +13,29 @@ return new class extends Migration
     {
         Schema::create('deposits', function (Blueprint $table) {
             $table->id();
-
             $table->foreignId('user_id')->constrained()->cascadeOnDelete();
-            //$table->foreignId('currency_id')->constrained()->cascadeOnDelete();
             $table->foreignId('network_id')->constrained()->cascadeOnDelete();
             $table->foreignId('currency_network_id')->constrained('currency_networks')->cascadeOnDelete();
             $table->foreignId('wallet_address_id')->constrained('wallet_addresses')->cascadeOnDelete();
-
             // Уникальный идентификатор внешнего on-chain факта.
             // ETH ERC20: txHash:logIndex
             // ETH native: txHash:0
             // TRON TRC20: txid:index
             // BTC: txid:vout
             $table->string('external_key');
-
             $table->string('txid');
             $table->string('from_address')->nullable();
             $table->string('to_address');
-
             $table->decimal('amount', 40, 18);
-
-            // Доп. тех. признаки. Это не доменная суть, а удобство поддержки.
-            $table->string('asset_type')->default('native'); // native | erc20 | trc20
-            $table->string('contract_address')->nullable();
-
             $table->string('block_hash')->nullable();
             $table->unsignedBigInteger('block_number')->nullable();
             $table->unsignedInteger('confirmations')->default(0);
-
-            $table->string('status')->default('detected'); // detected|pending|confirmed|credited|failed|reorged
-
+            $table->string('status')->default('detected'); // detected|pending|confirmed|credited|reorged|reversed|failed|reversal_failed
             $table->timestamp('detected_at')->nullable();
             $table->timestamp('confirmed_at')->nullable();
             $table->timestamp('credited_at')->nullable();
             $table->timestamp('finalized_at')->nullable();
             $table->timestamp('failed_at')->nullable();
-
-            ////////////////////////////////////////////////
             /**
              * Operation IDs.
              * Один депозит может быть credited один раз и reversed один раз.
@@ -73,10 +59,9 @@ return new class extends Migration
             /**
              * Если reversal не удался сразу.
              */
-            $table->unsignedInteger('reversal_attempts')->default(0)->after('reorg_block_number');
-            $table->text('reversal_last_error')->nullable()->after('reversal_attempts');
-            $table->timestamp('reversal_failed_at')->nullable()->after('reversal_last_error');
-            /// ////////////////////////////////////////////
+            $table->unsignedInteger('reversal_attempts')->default(0);
+            $table->text('reversal_last_error')->nullable();
+            $table->timestamp('reversal_failed_at')->nullable();
 
             $table->string('failure_reason')->nullable();
             $table->json('metadata')->nullable();

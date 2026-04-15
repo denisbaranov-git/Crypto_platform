@@ -4,143 +4,83 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Ledger\Services;
 
+use App\Domain\Ledger\Contracts\LedgerPostingService;
 use App\Domain\Ledger\Contracts\LedgerService;
+use App\Domain\Ledger\Contracts\SystemAccountResolverInterface;
+use App\Domain\Ledger\ValueObjects\LedgerPostingLine;
+use App\Domain\Ledger\ValueObjects\LedgerDirection;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentAccount;
-use App\Infrastructure\Persistence\Eloquent\Models\EloquentAccountTransaction;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentDeposit;
+use App\Infrastructure\Persistence\Eloquent\Models\EloquentLedgerHold;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentLedgerOperation;
+use DomainException;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
-use DomainException;
 
 final class EloquentLedgerService implements LedgerService
 {
+    public function __construct(
+        private readonly LedgerPostingService $posting,
+        private readonly SystemAccountResolverInterface $systemAccounts,
+    ) {}
+
     public function postDepositCredit(
         int $depositId,
         string $operationId,
         array $metadata = []
     ): void {
         DB::transaction(function () use ($depositId, $operationId, $metadata): void {
-            /**
-             * 1) Лочим deposit.
-             * Нельзя допустить двойной credit.
-             */
             $deposit = EloquentDeposit::query()
                 ->whereKey($depositId)
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            /**
-             * 2) Если депозит уже зачислен — выходим.
-             */
             if ($deposit->status === 'credited') {
                 return;
-            }
-
-            /**
-             * 3) Если депозит уже стал reorged/reversed — зачислять нельзя.
-             */
-            if (in_array($deposit->status, ['reorged', 'reversed'], true)) {
-                throw new DomainException('Deposit cannot be credited because it is already reorged/reversed.');
             }
 
             if ($deposit->status !== 'confirmed') {
                 throw new DomainException('Deposit must be confirmed before crediting.');
             }
 
-            /**
-             * 4) Идемпотентная операция.
-             * Один deposit-credit should exist once.
-             */
-            $operation = $this->findOrCreateOperation(
-                idempotencyKey: $operationId,
-                type: 'deposit_credit',
-                referenceType: 'deposit',
-                referenceId: $depositId,
-                metadata: $metadata
-            );
-
-            if ($operation->status === 'posted') {
-                return;
-            }
-
-            /**
-             * 5) Лочим account.
-             * account = текущий state баланса.
-             */
-            $account = EloquentAccount::query()
-                ->where('user_id', $deposit->user_id)
+            $userAccount = EloquentAccount::query()
+                ->where('owner_type', 'user')
+                ->where('owner_id', $deposit->user_id)
                 ->where('currency_network_id', $deposit->currency_network_id)
                 ->lockForUpdate()
                 ->first();
 
-            if (! $account) {
-                try {
-                    $account = EloquentAccount::create([
-                        'user_id' => $deposit->user_id,
-                        'currency_network_id' => $deposit->currency_network_id,
-                        'balance' => '0',
-                        'reserved_balance' => '0',
-                        'status' => 'active',
-                        'version' => 0,
-                        'metadata' => [],
-                    ]);
-                } catch (QueryException $e) {
-                    /**
-                     * Если два процесса одновременно создали account,
-                     * unique constraint спасает от дубля.
-                     */
-                    $account = EloquentAccount::query()
-                        ->where('user_id', $deposit->user_id)
-                        ->where('currency_network_id', $deposit->currency_network_id)
-                        ->lockForUpdate()
-                        ->firstOrFail();
-                }
-
-                $account->refresh();
+            if (! $userAccount) {
+                $userAccount = EloquentAccount::create([
+                    'owner_type' => 'user',
+                    'owner_id' => $deposit->user_id,
+                    'currency_network_id' => $deposit->currency_network_id,
+                    'balance' => '0',
+                    'reserved_balance' => '0',
+                    'status' => 'active',
+                    'version' => 0,
+                    'metadata' => [],
+                ]);
             }
 
-            $before = (string) $account->balance;
-            $after = bcadd($before, (string) $deposit->amount, 18);
+            $clearing = $this->systemAccounts->resolveByCode('clearing', $deposit->currency_network_id);
 
-            /**
-             * 6) Обновляем current state.
-             */
-            $account->balance = $after;
-            $account->version = ((int) $account->version) + 1;
-            $account->save();
+            $this->posting->post(
+                idempotencyKey: $operationId,
+                type: 'deposit_credit',
+                referenceType: 'deposit',
+                referenceId: $depositId,
+                lines: [
+                    LedgerPostingLine::credit($userAccount->id, (string) $deposit->amount, ['side' => 'user']),
+                    LedgerPostingLine::debit($clearing->id(), (string) $deposit->amount, ['side' => 'clearing']),
+                ],
+                metadata: $metadata
+            );
 
-            /**
-             * 7) Journal entry.
-             */
-            EloquentAccountTransaction::create([
-                'ledger_operation_id' => $operation->id,
-                'account_id' => $account->id,
-                'currency_network_id' => $deposit->currency_network_id,
-                'direction' => 'credit',
-                'amount' => (string) $deposit->amount,
-                'balance_before' => $before,
-                'balance_after' => $after,
-                'reference_type' => 'deposit',
-                'reference_id' => $deposit->id,
-                'status' => 'confirmed',
-                'metadata' => $metadata,
-            ]);
-
-            /**
-             * 8) Operation posted.
-             */
-            $operation->status = 'posted';
-            $operation->posted_at = now();
-            $operation->save();
-
-            /**
-             * 9) Deposit becomes credited.
-             */
             $deposit->status = 'credited';
             $deposit->credited_at = now();
-            $deposit->credited_operation_id = $operation->id;
+            $deposit->credited_operation_id = $operationId;
             $deposit->save();
         });
     }
@@ -150,45 +90,214 @@ final class EloquentLedgerService implements LedgerService
         array $metadata = []
     ): void {
         DB::transaction(function () use ($depositId, $metadata): void {
-            /**
-             * 1) Лочим deposit.
-             */
             $deposit = EloquentDeposit::query()
                 ->whereKey($depositId)
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            /**
-             * 2) Для reorg-flow reversal нужен только там, где реально был credit.
-             * Если депозит никогда не был credited — ledger reverse не нужен.
-             */
-            if ($deposit->status === 'reorged' && empty($deposit->credited_operation_id)) {
-                return;
-            }
-
             if (! in_array($deposit->status, ['credited', 'reorged'], true)) {
                 throw new DomainException('Only credited or reorged deposits can be reversed.');
+            }
+
+            if (empty($deposit->credited_operation_id)) {
+                return;
             }
 
             if (! empty($deposit->reversal_operation_id)) {
                 return;
             }
 
-            if (empty($deposit->credited_operation_id)) {
-                throw new DomainException('Cannot reverse deposit without credited_operation_id.');
-            }
+            $userAccount = EloquentAccount::query()
+                ->where('owner_type', 'user')
+                ->where('owner_id', $deposit->user_id)
+                ->where('currency_network_id', $deposit->currency_network_id)
+                ->lockForUpdate()
+                ->firstOrFail();
 
-            /**
-             * 3) Идемпотентный reverse key.
-             * Одна reversal-операция на один deposit.
-             */
-            $reverseOperationId = 'deposit-reversal:' . $deposit->id;
+            $clearing = $this->systemAccounts->resolveByCode('clearing', $deposit->currency_network_id);
 
-            $operation = $this->findOrCreateOperation(
-                idempotencyKey: $reverseOperationId,
+            $operationId = 'deposit-reversal:' . $deposit->id;
+
+            $this->posting->post(
+                idempotencyKey: $operationId,
                 type: 'deposit_reversal',
                 referenceType: 'deposit',
-                referenceId: $deposit->id,
+                referenceId: $depositId,
+                lines: [
+                    LedgerPostingLine::debit($userAccount->id, (string) $deposit->amount, ['side' => 'user']),
+                    LedgerPostingLine::credit($clearing->id(), (string) $deposit->amount, ['side' => 'clearing']),
+                ],
+                metadata: $metadata
+            );
+
+            $deposit->status = 'reversed';
+            $deposit->reversed_at = now();
+            $deposit->reversal_operation_id = $operationId;
+            $deposit->reversal_reason = $metadata['reason'] ?? 'blockchain_reorg';
+            $deposit->save();
+        });
+    }
+
+//    public function reserveFunds(
+//        int $userId,
+//        int $currencyNetworkId,
+//        string $amount,
+//        string $operationId,
+//        string $referenceType,
+//        ?int $referenceId = null,
+//        array $metadata = [],
+//        ?int $expiresInSeconds = null
+//    ): void {
+//        DB::transaction(function () use (
+//            $userId,
+//            $currencyNetworkId,
+//            $amount,
+//            $operationId,
+//            $referenceType,
+//            $referenceId,
+//            $metadata,
+//            $expiresInSeconds
+//        ): void {
+//            $account = EloquentAccount::query()
+//                ->where('owner_type', 'user')
+//                ->where('owner_id', $userId)
+//                ->where('currency_network_id', $currencyNetworkId)
+//                ->lockForUpdate()
+//                ->firstOrFail();
+//
+//            $available = bcsub((string) $account->balance, (string) $account->reserved_balance, 18);
+//
+//            if (bccomp($available, $amount, 18) < 0) {
+//                throw new DomainException('Insufficient available balance to reserve.');
+//            }
+//
+//            $account->reserved_balance = bcadd((string) $account->reserved_balance, $amount, 18);
+//            $account->version = ((int) $account->version) + 1;
+//            $account->save();
+//
+//            EloquentLedgerHold::create([
+//                'ledger_operation_id' => $operationId,
+//                'account_id' => $account->id,
+//                'currency_network_id' => $currencyNetworkId,
+//                'amount' => $amount,
+//                'status' => 'active',
+//                'reason' => 'withdrawal',
+//                'expires_at' => $expiresInSeconds ? now()->addSeconds($expiresInSeconds) : null,
+//                'metadata' => array_merge($metadata, [
+//                    'reference_type' => $referenceType,
+//                    'reference_id' => $referenceId,
+//                ]),
+//            ]);
+//        });
+//    }
+
+//    public function releaseFunds(
+//        int $holdId,
+//        string $operationId,
+//        string $referenceType,
+//        ?int $referenceId = null,
+//        array $metadata = []
+//    ): void {
+//        DB::transaction(function () use ($holdId): void {
+//            $hold = EloquentLedgerHold::query()
+//                ->whereKey($holdId)
+//                ->lockForUpdate()
+//                ->firstOrFail();
+//
+//            if ($hold->status !== 'active') {
+//                return;
+//            }
+//
+//            $account = EloquentAccount::query()
+//                ->whereKey($hold->account_id)
+//                ->lockForUpdate()
+//                ->firstOrFail();
+//
+//            $account->reserved_balance = bcsub((string) $account->reserved_balance, (string) $hold->amount, 18);
+//            $account->version = ((int) $account->version) + 1;
+//            $account->save();
+//
+//            $hold->status = 'released';
+//            $hold->released_at = now();
+//            $hold->save();
+//        });
+//    }
+
+//    public function consumeHold(
+//        int $holdId,
+//        string $operationId,
+//        string $referenceType,
+//        ?int $referenceId = null,
+//        array $metadata = []
+//    ): void {
+//        DB::transaction(function () use ($holdId, $operationId, $referenceType, $referenceId, $metadata): void {
+//            $hold = EloquentLedgerHold::query()
+//                ->whereKey($holdId)
+//                ->lockForUpdate()
+//                ->firstOrFail();
+//
+//            if ($hold->status !== 'active') {
+//                throw new DomainException('Only active hold can be consumed.');
+//            }
+//
+//            $account = EloquentAccount::query()
+//                ->whereKey($hold->account_id)
+//                ->lockForUpdate()
+//                ->firstOrFail();
+//
+//            $account->reserved_balance = bcsub((string) $account->reserved_balance, (string) $hold->amount, 18);
+//            $account->balance = bcsub((string) $account->balance, (string) $hold->amount, 18);
+//            $account->version = ((int) $account->version) + 1;
+//            $account->save();
+//
+//            $settlement = $this->systemAccounts->resolveByCode('clearing', $hold->currency_network_id);
+//
+//            $this->posting->post(
+//                idempotencyKey: $operationId,
+//                type: 'withdrawal_consume',
+//                referenceType: $referenceType,
+//                referenceId: $referenceId,
+//                lines: [
+//                    LedgerPostingLine::debit($account->id, (string) $hold->amount, ['side' => 'user']),
+//                    LedgerPostingLine::credit($settlement->id(), (string) $hold->amount, ['side' => 'settlement']),
+//                ],
+//                metadata: $metadata
+//            );
+//
+//            $hold->status = 'consumed';
+//            $hold->consumed_at = now();
+//            $hold->save();
+//        });
+//    }
+    public function reserveFunds(
+        int $userId,
+        int $currencyNetworkId,
+        string $amount,
+        string $operationId,
+        string $referenceType,
+        ?int $referenceId = null,
+        array $metadata = [],
+        ?int $expiresInSeconds = null
+    ): void {
+        DB::transaction(function () use (
+            $userId,
+            $currencyNetworkId,
+            $amount,
+            $operationId,
+            $referenceType,
+            $referenceId,
+            $metadata,
+            $expiresInSeconds
+        ): void {
+            /**
+             * 1) create/find operation header
+             * operationId = idempotency key
+             */
+            $operation = $this->findOrCreateOperation(
+                idempotencyKey: $operationId,
+                type: 'withdrawal_reserve',
+                referenceType: $referenceType,
+                referenceId: $referenceId,
                 metadata: $metadata
             );
 
@@ -197,80 +306,249 @@ final class EloquentLedgerService implements LedgerService
             }
 
             /**
-             * 4) Лочим account.
+             * 2) lock user account
              */
             $account = EloquentAccount::query()
-                ->where('user_id', $deposit->user_id)
-                ->where('currency_network_id', $deposit->currency_network_id)
+                ->where('owner_type', 'user')
+                ->where('owner_id', $userId)
+                ->where('currency_network_id', $currencyNetworkId)
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            /**
-             * 5) Проверяем доступный баланс.
-             * Если пользователь уже потратил деньги, reversal может стать невозможным.
-             */
             $available = bcsub((string) $account->balance, (string) $account->reserved_balance, 18);
 
-            if (bccomp($available, (string) $deposit->amount, 18) < 0) {
-                $deposit->status = 'reversal_failed';
-                $deposit->reversal_failed_at = now();
-                $deposit->reversal_reason = 'insufficient_available_balance';
-                $deposit->save();
-
-                $operation->status = 'failed';
-                $operation->failed_at = now();
-                $operation->metadata = array_merge($operation->metadata ?? [], [
-                    'reason' => 'insufficient_available_balance',
-                ]);
-                $operation->save();
-
-                throw new DomainException('Insufficient available balance for deposit reversal.');
+            if (bccomp($available, $amount, 18) < 0) {
+                throw new DomainException('Insufficient available balance to reserve.');
             }
 
-            $before = (string) $account->balance;
-            $after = bcsub($before, (string) $deposit->amount, 18);
-
             /**
-             * 6) Обновляем current state.
+             * 3) create hold linked to ledger_operations.id
+             * IMPORTANT:
+             * ledger_operation_id = UUID primary key of ledger_operations
              */
-            $account->balance = $after;
-            $account->version = ((int) $account->version) + 1;
-            $account->save();
-
-            /**
-             * 7) Journal entry.
-             */
-            EloquentAccountTransaction::create([
+            EloquentLedgerHold::query()->create([
                 'ledger_operation_id' => $operation->id,
                 'account_id' => $account->id,
-                'currency_network_id' => $deposit->currency_network_id,
-                'direction' => 'debit',
-                'amount' => (string) $deposit->amount,
-                'balance_before' => $before,
-                'balance_after' => $after,
-                'reference_type' => 'deposit',
-                'reference_id' => $deposit->id,
-                'status' => 'confirmed',
+                'currency_network_id' => $currencyNetworkId,
+                'amount' => $amount,
+                'status' => 'active',
+                'reason' => 'withdrawal',
+                'expires_at' => $expiresInSeconds ? now()->addSeconds($expiresInSeconds) : null,
                 'metadata' => array_merge($metadata, [
-                    'reversal_of_operation_id' => $deposit->credited_operation_id,
-                    'reason' => 'blockchain_reorg',
+                    'reference_type' => $referenceType,
+                    'reference_id' => $referenceId,
+                    'operation_idempotency_key' => $operationId,
                 ]),
             ]);
 
             /**
-             * 8) Operation posted.
+             * 4) update reserved_balance only
+             */
+            $account->reserved_balance = bcadd((string) $account->reserved_balance, $amount, 18);
+            $account->version = ((int) $account->version) + 1;
+            $account->save();
+
+            /**
+             * 5) mark operation posted
              */
             $operation->status = 'posted';
             $operation->posted_at = now();
             $operation->save();
+        });
+    }
+
+    public function releaseFunds(
+        int $holdId,
+        string $operationId,
+        string $referenceType,
+        ?int $referenceId = null,
+        array $metadata = []
+    ): void {
+        DB::transaction(function () use (
+            $holdId,
+            $operationId,
+            $referenceType,
+            $referenceId,
+            $metadata
+        ): void {
+            /**
+             * 1) create/find operation header
+             */
+            $operation = $this->findOrCreateOperation(
+                idempotencyKey: $operationId,
+                type: 'withdrawal_release',
+                referenceType: $referenceType,
+                referenceId: $referenceId,
+                metadata: $metadata
+            );
+
+            if ($operation->status === 'posted') {
+                return;
+            }
 
             /**
-             * 9) Deposit becomes reversed.
+             * 2) lock hold
              */
-            $deposit->status = 'reversed';
-            $deposit->reversed_at = now();
-            $deposit->reversal_operation_id = $operation->id;
-            $deposit->save();
+            $hold = EloquentLedgerHold::query()
+                ->whereKey($holdId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($hold->status !== 'active') {
+                return;
+            }
+
+            /**
+             * 3) lock account and release reserved amount
+             */
+            $account = EloquentAccount::query()
+                ->whereKey($hold->account_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (bccomp((string) $account->reserved_balance, (string) $hold->amount, 18) < 0) {
+                throw new DomainException('Reserved balance is less than hold amount.');
+            }
+
+            $account->reserved_balance = bcsub((string) $account->reserved_balance, (string) $hold->amount, 18);
+            $account->version = ((int) $account->version) + 1;
+            $account->save();
+
+            $hold->status = 'released';
+            $hold->released_at = now();
+            $hold->metadata = array_merge($hold->metadata ?? [], [
+                'release_operation_idempotency_key' => $operationId,
+                'reference_type' => $referenceType,
+                'reference_id' => $referenceId,
+            ]);
+            $hold->save();
+
+            $operation->status = 'posted';
+            $operation->posted_at = now();
+            $operation->save();
+        });
+    }
+
+    public function consumeHold(
+        int $holdId,
+        string $operationId,
+        string $referenceType,
+        ?int $referenceId = null,
+        array $metadata = []
+    ): void {
+        DB::transaction(function () use (
+            $holdId,
+            $operationId,
+            $referenceType,
+            $referenceId,
+            $metadata
+        ): void {
+            /**
+             * 1) create/find operation header
+             */
+            $operation = $this->findOrCreateOperation(
+                idempotencyKey: $operationId,
+                type: 'withdrawal_consume',
+                referenceType: $referenceType,
+                referenceId: $referenceId,
+                metadata: $metadata
+            );
+
+            if ($operation->status === 'posted') {
+                return;
+            }
+
+            /**
+             * 2) lock hold
+             */
+            $hold = EloquentLedgerHold::query()
+                ->whereKey($holdId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($hold->status !== 'active') {
+                throw new DomainException('Only active hold can be consumed.');
+            }
+
+            /**
+             * 3) double-entry posting:
+             *    - user debit
+             *    - clearing/settlement credit
+             *
+             * IMPORTANT:
+             * - posting service changes balance
+             * - this method must NOT manually subtract balance
+             */
+            $userAccount = EloquentAccount::query()
+                ->whereKey($hold->account_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            /**
+             * if you prefer "settlement" in code, rename system account code later.
+             * for now we keep the already established code "clearing".
+             */
+            $clearingAccount = $this->systemAccounts->resolveByCode('clearing', $hold->currency_network_id);
+
+            if ($clearingAccount->id() === null) {
+                throw new DomainException('Clearing account is not persisted.');
+            }
+
+            /**
+             * Posting happens inside the same DB transaction.
+             * No nested DB::transaction inside posting service.
+             */
+            $this->posting->post(
+                idempotencyKey: $operationId,
+                type: 'withdrawal_consume',
+                referenceType: $referenceType,
+                referenceId: $referenceId,
+                lines: [
+                    LedgerPostingLine::debit($userAccount->id, (string) $hold->amount, [
+                        'side' => 'user',
+                        'hold_id' => $hold->id,
+                    ]),
+                    LedgerPostingLine::credit($clearingAccount->id(), (string) $hold->amount, [
+                        'side' => 'clearing',
+                        'hold_id' => $hold->id,
+                    ]),
+                ],
+                metadata: $metadata
+            );
+
+            /**
+             * 4) only after successful posting:
+             *    decrease reserved_balance
+             *    do NOT touch balance here
+             */
+            $freshAccount = EloquentAccount::query()
+                ->whereKey($userAccount->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (bccomp((string) $freshAccount->reserved_balance, (string) $hold->amount, 18) < 0) {
+                throw new DomainException('Reserved balance is less than hold amount.');
+            }
+
+            $freshAccount->reserved_balance = bcsub((string) $freshAccount->reserved_balance, (string) $hold->amount, 18);
+            $freshAccount->version = ((int) $freshAccount->version) + 1;
+            $freshAccount->save();
+
+            /**
+             * 5) mark hold consumed
+             */
+            $hold->status = 'consumed';
+            $hold->consumed_at = now();
+            $hold->metadata = array_merge($hold->metadata ?? [], [
+                'consume_operation_idempotency_key' => $operationId,
+                'reference_type' => $referenceType,
+                'reference_id' => $referenceId,
+            ]);
+            $hold->save();
+
+            $operation->status = 'posted';
+            $operation->posted_at = now();
+            $operation->save();
         });
     }
 
@@ -291,7 +569,7 @@ final class EloquentLedgerService implements LedgerService
         }
 
         try {
-            return EloquentLedgerOperation::create([
+            return EloquentLedgerOperation::query()->create([
                 'id' => (string) Str::uuid(),
                 'idempotency_key' => $idempotencyKey,
                 'type' => $type,
@@ -314,325 +592,162 @@ final class EloquentLedgerService implements LedgerService
     }
 
 
-//    public function reserveFunds(
-//        int $userId,
-//        int $currencyNetworkId,
-//        string $amount,
-//        string $operationId,
-//        string $referenceType,
-//        ?int $referenceId = null,
-//        array $metadata = [],
-//        ?int $expiresInSeconds = null
-//    ): void {
-//        DB::transaction(function () use (
-//            $userId,
-//            $currencyNetworkId,
-//            $amount,
-//            $operationId,
-//            $referenceType,
-//            $referenceId,
-//            $metadata,
-//            $expiresInSeconds
-//        ): void {
-//            $operation = $this->findOrCreateOperation(
-//                idempotencyKey: $operationId,
-//                type: 'withdrawal_reserve',
-//                referenceType: $referenceType,
-//                referenceId: $referenceId,
-//                metadata: $metadata
-//            );
-//
-//            if ($operation->status === 'posted') {
-//                return;
-//            }
-//
-//            $account = EloquentAccount::query()
-//                ->where('user_id', $userId)
-//                ->where('currency_network_id', $currencyNetworkId)
-//                ->lockForUpdate()
-//                ->firstOrFail();
-//
-//            $beforeBalance = (string) $account->balance;
-//            $beforeReserved = (string) $account->reserved_balance;
-//            $available = bcsub($beforeBalance, $beforeReserved, 18);
-//
-//            if (bccomp($available, $amount, 18) < 0) {
-//                throw new DomainException('Insufficient available balance to reserve.');
-//            }
-//
-//            $newReserved = bcadd($beforeReserved, $amount, 18);
-//
-//            $account->reserved_balance = $newReserved;
-//            $account->version = ((int) $account->version) + 1;
-//            $account->save();
-//
-//            $hold = EloquentLedgerHold::create([
-//                'ledger_operation_id' => $operation->id,
-//                'account_id' => $account->id,
-//                'currency_network_id' => $currencyNetworkId,
-//                'amount' => $amount,
-//                'status' => 'active',
-//                'reason' => 'withdrawal',
-//                'expires_at' => $expiresInSeconds ? now()->addSeconds($expiresInSeconds) : null,
-//                'metadata' => array_merge($metadata, [
-//                    'reference_type' => $referenceType,
-//                    'reference_id' => $referenceId,
-//                ]),
-//            ]);
-//
-//            $operation->status = 'posted';
-//            $operation->posted_at = now();
-//            $operation->save();
-//        });
-//    }
-//
-//    public function releaseFunds(
-//        int $holdId,
-//        string $operationId,
-//        string $referenceType,
-//        ?int $referenceId = null,
-//        array $metadata = []
-//    ): void {
-//        DB::transaction(function () use ($holdId, $operationId, $referenceType, $referenceId, $metadata): void {
-//            $operation = $this->findOrCreateOperation(
-//                idempotencyKey: $operationId,
-//                type: 'withdrawal_release',
-//                referenceType: $referenceType,
-//                referenceId: $referenceId,
-//                metadata: $metadata
-//            );
-//
-//            if ($operation->status === 'posted') {
-//                return;
-//            }
-//
-//            $hold = EloquentLedgerHold::query()
-//                ->whereKey($holdId)
-//                ->lockForUpdate()
-//                ->firstOrFail();
-//
-//            if ($hold->status !== 'active') {
-//                return;
-//            }
-//
-//            $account = EloquentAccount::query()
-//                ->whereKey($hold->account_id)
-//                ->lockForUpdate()
-//                ->firstOrFail();
-//
-//            $beforeReserved = (string) $account->reserved_balance;
-//            $newReserved = bcsub($beforeReserved, (string) $hold->amount, 18);
-//
-//            $account->reserved_balance = $newReserved;
-//            $account->version = ((int) $account->version) + 1;
-//            $account->save();
-//
-//            $hold->status = 'released';
-//            $hold->released_at = now();
-//            $hold->save();
-//
-//            $operation->status = 'posted';
-//            $operation->posted_at = now();
-//            $operation->save();
-//        });
-//    }
-//
-//    public function consumeHold(
-//        int $holdId,
-//        string $operationId,
-//        string $referenceType,
-//        ?int $referenceId = null,
-//        array $metadata = []
-//    ): void {
-//        DB::transaction(function () use ($holdId, $operationId, $referenceType, $referenceId, $metadata): void {
-//            $operation = $this->findOrCreateOperation(
-//                idempotencyKey: $operationId,
-//                type: 'withdrawal_consume',
-//                referenceType: $referenceType,
-//                referenceId: $referenceId,
-//                metadata: $metadata
-//            );
-//
-//            if ($operation->status === 'posted') {
-//                return;
-//            }
-//
-//            $hold = EloquentLedgerHold::query()
-//                ->whereKey($holdId)
-//                ->lockForUpdate()
-//                ->firstOrFail();
-//
-//            if ($hold->status !== 'active') {
-//                throw new DomainException('Only active hold can be consumed.');
-//            }
-//
-//            $account = EloquentAccount::query()
-//                ->whereKey($hold->account_id)
-//                ->lockForUpdate()
-//                ->firstOrFail();
-//
-//            $beforeBalance = (string) $account->balance;
-//            $beforeReserved = (string) $account->reserved_balance;
-//
-//            if (bccomp($beforeReserved, (string) $hold->amount, 18) < 0) {
-//                throw new DomainException('Reserved balance is less than hold amount.');
-//            }
-//
-//            if (bccomp($beforeBalance, (string) $hold->amount, 18) < 0) {
-//                throw new DomainException('Insufficient balance for hold consumption.');
-//            }
-//
-//            $account->reserved_balance = bcsub($beforeReserved, (string) $hold->amount, 18);
-//            $account->balance = bcsub($beforeBalance, (string) $hold->amount, 18);
-//            $account->version = ((int) $account->version) + 1;
-//            $account->save();
-//
-//            EloquentAccountTransaction::create([
-//                'ledger_operation_id' => $operation->id,
-//                'account_id' => $account->id,
-//                'currency_network_id' => $hold->currency_network_id,
-//                'direction' => 'debit',
-//                'amount' => $hold->amount,
-//                'balance_before' => $beforeBalance,
-//                'balance_after' => (string) $account->balance,
-//                'reference_type' => $referenceType,
-//                'reference_id' => $referenceId,
-//                'status' => 'confirmed',
-//                'metadata' => array_merge($metadata, [
-//                    'hold_id' => $hold->id,
-//                    'consumed_from_hold' => true,
-//                ]),
-//            ]);
-//
-//            $hold->status = 'consumed';
-//            $hold->consumed_at = now();
-//            $hold->save();
-//
-//            $operation->status = 'posted';
-//            $operation->posted_at = now();
-//            $operation->save();
-//        });
-//    }
-//
-//    public function transferInternal(
-//        int $fromUserId,
-//        int $toUserId,
-//        int $currencyNetworkId,
-//        string $amount,
-//        string $operationId,
-//        string $referenceType,
-//        ?int $referenceId = null,
-//        array $metadata = []
-//    ): void {
-//        DB::transaction(function () use (
-//            $fromUserId,
-//            $toUserId,
-//            $currencyNetworkId,
-//            $amount,
-//            $operationId,
-//            $referenceType,
-//            $referenceId,
-//            $metadata
-//        ): void {
-//            if ($fromUserId === $toUserId) {
-//                throw new DomainException('Self transfer is not allowed.');
-//            }
-//
-//            $operation = $this->findOrCreateOperation(
-//                idempotencyKey: $operationId,
-//                type: 'internal_transfer',
-//                referenceType: $referenceType,
-//                referenceId: $referenceId,
-//                metadata: $metadata
-//            );
-//
-//            if ($operation->status === 'posted') {
-//                return;
-//            }
-//
-//            /**
-//             * Важно: читаем оба аккаунта под lock в детерминированном порядке.
-//             */
-//            $sender = EloquentAccount::query()
-//                ->where('user_id', $fromUserId)
-//                ->where('currency_network_id', $currencyNetworkId)
-//                ->lockForUpdate()
-//                ->firstOrFail();
-//
-//            $receiver = EloquentAccount::query()
-//                ->where('user_id', $toUserId)
-//                ->where('currency_network_id', $currencyNetworkId)
-//                ->lockForUpdate()
-//                ->first();
-//
-//            if (! $receiver) {
-//                $receiver = EloquentAccount::create([
-//                    'user_id' => $toUserId,
-//                    'currency_network_id' => $currencyNetworkId,
-//                    'balance' => '0',
-//                    'reserved_balance' => '0',
-//                    'status' => 'active',
-//                    'version' => 0,
-//                    'metadata' => [],
-//                ]);
-//
-//                $receiver->refresh();
-//            }
-//
-//            $senderBefore = (string) $sender->balance;
-//            $receiverBefore = (string) $receiver->balance;
-//
-//            if (bccomp($senderBefore, $amount, 18) < 0) {
-//                throw new DomainException('Insufficient funds for internal transfer.');
-//            }
-//
-//            $senderAfter = bcsub($senderBefore, $amount, 18);
-//            $receiverAfter = bcadd($receiverBefore, $amount, 18);
-//
-//            $sender->balance = $senderAfter;
-//            $sender->version = ((int) $sender->version) + 1;
-//            $sender->save();
-//
-//            $receiver->balance = $receiverAfter;
-//            $receiver->version = ((int) $receiver->version) + 1;
-//            $receiver->save();
-//
-//            EloquentAccountTransaction::insert([
-//                [
-//                    'ledger_operation_id' => $operation->id,
-//                    'account_id' => $sender->id,
-//                    'currency_network_id' => $currencyNetworkId,
-//                    'direction' => 'debit',
-//                    'amount' => $amount,
-//                    'balance_before' => $senderBefore,
-//                    'balance_after' => $senderAfter,
-//                    'reference_type' => $referenceType,
-//                    'reference_id' => $referenceId,
-//                    'status' => 'confirmed',
-//                    'metadata' => array_merge($metadata, ['side' => 'sender']),
-//                    'created_at' => now(),
-//                    'updated_at' => now(),
-//                ],
-//                [
-//                    'ledger_operation_id' => $operation->id,
-//                    'account_id' => $receiver->id,
-//                    'currency_network_id' => $currencyNetworkId,
-//                    'direction' => 'credit',
-//                    'amount' => $amount,
-//                    'balance_before' => $receiverBefore,
-//                    'balance_after' => $receiverAfter,
-//                    'reference_type' => $referenceType,
-//                    'reference_id' => $referenceId,
-//                    'status' => 'confirmed',
-//                    'metadata' => array_merge($metadata, ['side' => 'receiver']),
-//                    'created_at' => now(),
-//                    'updated_at' => now(),
-//                ],
-//            ]);
-//
-//            $operation->status = 'posted';
-//            $operation->posted_at = now();
-//            $operation->save();
-//        });
-//    }
+    public function transferInternal(
+        int $fromUserId,
+        int $toUserId,
+        int $currencyNetworkId,
+        string $amount,
+        string $operationId,
+        string $referenceType,
+        ?int $referenceId = null,
+        array $metadata = []
+    ): void {
+        DB::transaction(function () use (
+            $fromUserId,
+            $toUserId,
+            $currencyNetworkId,
+            $amount,
+            $operationId,
+            $referenceType,
+            $referenceId,
+            $metadata
+        ): void {
+            if ($fromUserId === $toUserId) {
+                throw new DomainException('Self transfer is not allowed.');
+            }
+
+            $sender = EloquentAccount::query()
+                ->where('owner_type', 'user')
+                ->where('owner_id', $fromUserId)
+                ->where('currency_network_id', $currencyNetworkId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $receiver = EloquentAccount::query()
+                ->where('owner_type', 'user')
+                ->where('owner_id', $toUserId)
+                ->where('currency_network_id', $currencyNetworkId)
+                ->lockForUpdate()
+                ->first();
+
+            if (! $receiver) {
+                $receiver = EloquentAccount::create([
+                    'owner_type' => 'user',
+                    'owner_id' => $toUserId,
+                    'currency_network_id' => $currencyNetworkId,
+                    'balance' => '0',
+                    'reserved_balance' => '0',
+                    'status' => 'active',
+                    'version' => 0,
+                    'metadata' => [],
+                ]);
+            }
+
+            $this->posting->post(
+                idempotencyKey: $operationId,
+                type: 'internal_transfer',
+                referenceType: $referenceType,
+                referenceId: $referenceId,
+                lines: [
+                    LedgerPostingLine::debit($sender->id, $amount, ['side' => 'sender']),
+                    LedgerPostingLine::credit($receiver->id, $amount, ['side' => 'receiver']),
+                ],
+                metadata: $metadata
+            );
+        });
+    }
+
+    public function moveToSuspense( //admin feature
+        int $userId,
+        int $currencyNetworkId,
+        string $amount,
+        string $operationId,
+        string $reason,
+        ?int $referenceId = null,
+        array $metadata = []
+    ): void {
+        DB::transaction(function () use (
+            $userId,
+            $currencyNetworkId,
+            $amount,
+            $operationId,
+            $reason,
+            $referenceId,
+            $metadata
+        ): void {
+            $userAccount = EloquentAccount::query()
+                ->where('owner_type', 'user')
+                ->where('owner_id', $userId)
+                ->where('currency_network_id', $currencyNetworkId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $available = bcsub((string) $userAccount->balance, (string) $userAccount->reserved_balance, 18);
+
+            if (bccomp($available, $amount, 18) < 0) {
+                throw new DomainException('Insufficient available balance to move to suspense.');
+            }
+
+            $suspense = $this->systemAccounts->resolveByCode('suspense', $currencyNetworkId);
+
+            $this->posting->post(
+                idempotencyKey: $operationId,
+                type: 'move_to_suspense',
+                referenceType: 'manual_adjustment',
+                referenceId: $referenceId,
+                lines: [
+                    LedgerPostingLine::debit($userAccount->id, $amount, ['reason' => $reason]),
+                    LedgerPostingLine::credit($suspense->id(), $amount, ['reason' => $reason]),
+                ],
+                metadata: array_merge($metadata, [
+                    'reason' => $reason,
+                    'mode' => 'to_suspense',
+                ])
+            );
+        });
+    }
+
+    public function releaseFromSuspense(//admin feature
+        int $userId,
+        int $currencyNetworkId,
+        string $amount,
+        string $operationId,
+        string $reason,
+        ?int $referenceId = null,
+        array $metadata = []
+    ): void {
+        DB::transaction(function () use (
+            $userId,
+            $currencyNetworkId,
+            $amount,
+            $operationId,
+            $reason,
+            $referenceId,
+            $metadata
+        ): void {
+            $userAccount = EloquentAccount::query()
+                ->where('owner_type', 'user')
+                ->where('owner_id', $userId)
+                ->where('currency_network_id', $currencyNetworkId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $suspense = $this->systemAccounts->resolveByCode('suspense', $currencyNetworkId);
+
+            $this->posting->post(
+                idempotencyKey: $operationId,
+                type: 'release_from_suspense',
+                referenceType: 'manual_adjustment',
+                referenceId: $referenceId,
+                lines: [
+                    LedgerPostingLine::debit($suspense->id(), $amount, ['reason' => $reason]),
+                    LedgerPostingLine::credit($userAccount->id, $amount, ['reason' => $reason]),
+                ],
+                metadata: array_merge($metadata, [
+                    'reason' => $reason,
+                    'mode' => 'from_suspense',
+                ])
+            );
+        });
+    }
 }

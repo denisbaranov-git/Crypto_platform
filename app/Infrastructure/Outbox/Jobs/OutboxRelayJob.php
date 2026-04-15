@@ -65,7 +65,17 @@ final class OutboxRelayJob implements ShouldQueue
                         metadata: $payload
                     ));
                 } else {
-                    throw new \DomainException('Unknown outbox event type: ' . $message->event_type);
+                    logger()->error('Unknown outbox event type', [
+                        'event_type' => $message->event_type,
+                        'idempotency_key' => $message->idempotency_key,
+                    ]);
+
+                    $outbox->markTerminalFailure(
+                        $message->idempotency_key,
+                        'Unknown event type: ' . $message->event_type
+                    );
+
+                    continue;
                 }
 
                 $outbox->markDispatched($message->idempotency_key);

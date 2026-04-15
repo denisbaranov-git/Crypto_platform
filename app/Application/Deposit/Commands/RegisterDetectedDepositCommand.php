@@ -6,7 +6,6 @@ final readonly class RegisterDetectedDepositCommand
 {
     public function __construct(
         public int $userId,
-        public int $currencyId,
         public int $networkId,
         public int $currencyNetworkId,
         public int $walletAddressId,

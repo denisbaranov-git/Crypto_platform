@@ -106,7 +106,6 @@ final class ScanNetworkBlocksJob implements ShouldQueue
                 // 2) Регистрируем факт депозита.
                 $registerHandler->handle(new RegisterDetectedDepositCommand(
                     userId: $walletContext['user_id'],
-                    currencyId: $currency->id,
                     networkId: $network->id,
                     currencyNetworkId: $currencyNetwork->id,
                     walletAddressId: $walletContext['wallet_address_id'],

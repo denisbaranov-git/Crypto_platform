@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->foreignId('network_id');
             $table->string('address');
-            $table->string('type');// тип кошелька hot/ cold/ sweep/ fee ...
+            $table->string('type');// тип кошелька type: hot/ cold/ sweep/ fee
             $table->string('encrypted_private_key');
             $table->string('status')->default('active'); //статус active disabled
             $table->timestamps();

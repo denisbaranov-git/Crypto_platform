@@ -13,17 +13,10 @@ return new class extends Migration
     {
         Schema::create('account_transactions', function (Blueprint $table) {
             $table->id();
-            $table->uuid('ledger_operation_id');
-            $table->foreign('ledger_operation_id')
-                ->references('id')
-                ->on('ledger_operations')
-                ->cascadeOnDelete();
-            $table->foreignId('account_id')
-                ->constrained('accounts')
-                ->cascadeOnDelete();
-            $table->foreignId('currency_network_id')
-                ->constrained('currency_networks')
-                ->cascadeOnDelete();
+            $table->uuid('ledger_operation_id')->nullable();
+            $table->foreign('ledger_operation_id')->references('id')->on('ledger_operations')->cascadeOnDelete();
+            $table->foreignId('account_id')->constrained('accounts')->cascadeOnDelete();
+            $table->foreignId('currency_network_id')->constrained('currency_networks')->cascadeOnDelete();
             $table->enum('direction', ['debit', 'credit']);
             $table->decimal('amount', 40, 18);
             $table->decimal('balance_before', 40, 18);

@@ -26,7 +26,7 @@ return new class extends Migration
             $table->timestamp('failed_at')->nullable();
 
             $table->timestamps();
-
+            //ledger_operations.idempotency_key UNIQU
             $table->index(['reference_type', 'reference_id'], 'idx_ledger_operations_reference');
             $table->index(['status', 'created_at'], 'idx_ledger_operations_status_created');
         });

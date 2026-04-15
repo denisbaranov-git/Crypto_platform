@@ -302,32 +302,30 @@ final class Deposit
         ?BlockNumber $rewindToBlock = null,
         ?string $reason = 'blockchain_reorg'
     ): void {
+        $wasCredited = $this->status === DepositStatus::Credited;
         $oldBlock = $this->blockNumber?->value();
 
-        // Reorged статус + metadata о реорге.
         $this->status = DepositStatus::Reorged;
         $this->reorgedAt = new \DateTimeImmutable();
         $this->reorgReason = $reason;
         $this->reorgBlockNumber = $rewindToBlock?->value();
-
         // СБРОС текущих on-chain индикаторов, потому что chain state был откатан.
         $this->blockHash = null;
         $this->blockNumber = null;
         $this->confirmations = 0;
         $this->finalizedAt = null;
-
         // creditedAt НЕ трогаем: это факт, что ledger когда-то кредитовал.
         // Его потом компенсирует reversal.
-
-        $this->recordDomainEvent(new DepositReorged(
-            depositId: $this->id?->value(),
-            networkId: $this->networkId,
-            externalKey: $this->externalKey->value(),
-            oldBlockNumber: $oldBlock,
-            newBlockNumber: $rewindToBlock?->value(),
-        ));
+        if ($wasCredited) {
+            $this->recordDomainEvent(new DepositReorged(
+                depositId: $this->id?->value(),
+                networkId: $this->networkId,
+                externalKey: $this->externalKey->value(),
+                oldBlockNumber: $oldBlock,
+                newBlockNumber: $rewindToBlock?->value(),
+            ));
+        }
     }
-
 
     public function markReversed(string $operationId, ?string $reason = 'deposit_reversal'): void
     {

@@ -33,8 +33,8 @@ return new class extends Migration
             $table->decimal('finality_threshold', 40, 18)->nullable()->after('finalization_blocks')
                 ->comment('Минимальная сумма для применения финализации');
             // Комиссии вынесли в fee_rules!!!!!!!!denis
-            $table->decimal('withdrawal_fee', 40, 18)->default(0)->comment('Комиссия за вывод');
-            $table->enum('withdrawal_fee_type', ['fixed', 'percent'])->default('fixed')->comment('Тип комиссии (фикс/процент)');
+            //$table->decimal('withdrawal_fee', 40, 18)->default(0)->comment('Комиссия за вывод');
+            //$table->enum('withdrawal_fee_type', ['fixed', 'percent'])->default('fixed')->comment('Тип комиссии (фикс/процент)');
             // Статусы
             $table->boolean('is_active')->default(true)->comment('Активна ли пара сеть-валюта');
             $table->boolean('is_deposit_enabled')->default(true)->comment('Разрешены ли депозиты');
