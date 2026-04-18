@@ -3,10 +3,11 @@
 namespace App\Infrastructure\Persistence\Eloquent\Mappers;
 
 use App\Domain\Deposit\Entities\Deposit;
-use App\Domain\Deposit\ValueObjects\BlockNumber;
 use App\Domain\Deposit\ValueObjects\DepositStatus;
-use App\Domain\Deposit\ValueObjects\ExternalKey;
-use App\Domain\Deposit\ValueObjects\TransactionHash;
+use App\Domain\Shared\ValueObjects\BlockNumber;
+use App\Domain\Shared\ValueObjects\ExternalKey;
+//use App\Domain\Shared\ValueObjects\TransactionHash;
+use App\Domain\Shared\ValueObjects\TxId;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentDeposit;
 
 final class DepositMapper
@@ -20,7 +21,7 @@ final class DepositMapper
             currencyNetworkId: (int) $model->currency_network_id,
             walletAddressId: (int) $model->wallet_address_id,
             externalKey: ExternalKey::fromString($model->external_key),
-            txid:  TransactionHash::fromString((string) $model->txid),
+            txid:  TxId::fromString((string) $model->txid),
             amount: (string) $model->amount,
             toAddress: (string) $model->to_address,
             status: DepositStatus::from((string) $model->status),

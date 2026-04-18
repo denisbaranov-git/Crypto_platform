@@ -12,7 +12,8 @@ interface LedgerHoldRepository
 
     public function findByIdForUpdate(int $id): ?LedgerHold;
 
-    public function findActiveByLedgerOperationId(string $ledgerOperationId): ?LedgerHold;
+    //public function findActiveByLedgerOperationId(string $ledgerOperationId): ?LedgerHold;
+    public function findByLedgerOperationId(string $ledgerOperationId): ?LedgerHold;
 
     public function save(LedgerHold $hold): LedgerHold;
 }

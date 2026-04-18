@@ -5,7 +5,7 @@ namespace App\Infrastructure\Persistence\Eloquent\Deposit\Repositories;
 use App\Domain\Deposit\Entities\Deposit;
 use App\Domain\Deposit\Repositories\DepositRepository;
 use App\Domain\Deposit\ValueObjects\DepositId;
-use App\Domain\Deposit\ValueObjects\ExternalKey;
+use App\Domain\Shared\ValueObjects\ExternalKey;
 use App\Infrastructure\Persistence\Eloquent\Mappers\DepositMapper;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentDeposit;
 
@@ -35,7 +35,15 @@ final class EloquentDepositRepository implements DepositRepository
 
         return $this->mapper->toEntity($model->refresh());
     }
+    public function lockById(DepositId $id): ?Deposit
+    {
+        $model = EloquentDeposit::query()
+            ->whereKey($id)
+            ->lockForUpdate()
+            ->first();
 
+        return $model ? $this->mapper->toEntity($model) : null;
+    }
     public function findById(DepositId $id): ?Deposit
     {
         $model = EloquentDeposit::query()->find($id->value());

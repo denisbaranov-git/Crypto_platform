@@ -8,10 +8,17 @@ use App\Application\Deposit\Commands\CreditDepositCommand;
 use App\Application\Deposit\Commands\ReverseDepositCreditCommand;
 use App\Application\Deposit\Handlers\CreditDepositHandler;
 use App\Application\Deposit\Handlers\ReverseDepositCreditHandler;
+use App\Application\Withdrawal\Commands\BroadcastWithdrawalCommand;
+use App\Application\Withdrawal\Commands\ConsumeWithdrawalHoldCommand;
+use App\Application\Withdrawal\Handlers\BroadcastWithdrawalHandler;
+use App\Application\Withdrawal\Handlers\ConsumeWithdrawalHoldHandler;
 use App\Domain\Deposit\Events\DepositConfirmed;
-//use App\Infrastructure\Outbox\Repositories\OutboxRepository;
 use App\Domain\Deposit\Events\DepositReorged;
 use App\Domain\Shared\Outbox\OutboxRepository;
+use App\Domain\Withdrawal\Events\WithdrawalBroadcasted;
+use App\Domain\Withdrawal\Events\WithdrawalConfirmed;
+use App\Domain\Withdrawal\Events\WithdrawalFailed;
+use App\Domain\Withdrawal\Events\WithdrawalReserved;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Throwable;
 
@@ -25,10 +32,9 @@ final class OutboxRelayJob implements ShouldQueue
         OutboxRepository $outbox,
         CreditDepositHandler $creditDepositHandler,
         ReverseDepositCreditHandler $reverseDepositCreditHandler,
+        BroadcastWithdrawalHandler $broadcastWithdrawalHandler,
+        ConsumeWithdrawalHoldHandler $consumeWithdrawalHoldHandler,
     ): void {
-        /**
-         * Возвращаем зависшие processing rows обратно в pending.
-         */
         $outbox->reclaimStaleProcessing();
 
         $messages = $outbox->fetchPending($this->batchSize);
@@ -64,6 +70,48 @@ final class OutboxRelayJob implements ShouldQueue
                         depositId: $depositId,
                         metadata: $payload
                     ));
+                } elseif ($message->event_type === WithdrawalReserved::class) {
+                    $withdrawalId = (int) ($payload['withdrawalId'] ?? 0);
+
+                    if ($withdrawalId <= 0) {
+                        throw new \DomainException('Invalid WithdrawalReserved payload.');
+                    }
+
+                    $broadcastWithdrawalHandler->handle(new BroadcastWithdrawalCommand(
+                        withdrawalId: $withdrawalId,
+                        //operationId: 'withdrawal:' . $withdrawalId . ':broadcast',
+                        metadata: $payload
+                    ));
+                } elseif ($message->event_type === WithdrawalBroadcasted::class) {
+                    $withdrawalId = (int) ($payload['withdrawalId'] ?? 0);
+                    $holdId = (int) ($payload['holdId'] ?? 0);
+
+                    if ($withdrawalId <= 0 || $holdId <= 0) {
+                        throw new \DomainException('Invalid WithdrawalBroadcasted payload.');
+                    }
+
+                    $consumeWithdrawalHoldHandler->handle(new ConsumeWithdrawalHoldCommand(
+                        withdrawalId: $withdrawalId,
+                        holdId: $holdId,
+                        operationId: 'withdrawal:' . $withdrawalId . ':consume',
+                        metadata: $payload
+                    ));
+
+                    //denis // notify user / webhook
+
+                } elseif (
+                    $message->event_type === WithdrawalConfirmed::class) {
+                    logger()->info('Withdrawal lifecycle event dispatched', [
+                        'event_type' => $message->event_type,
+                        'idempotency_key' => $message->idempotency_key,
+                    ]);
+                    //denis // final success
+
+                } elseif ($message->event_type === WithdrawalFailed::class) {
+                    logger()->info('Withdrawal lifecycle event dispatched - Failed', [
+                        'event_type' => $message->event_type,
+                        'idempotency_key' => $message->idempotency_key,
+                    ]);
                 } else {
                     logger()->error('Unknown outbox event type', [
                         'event_type' => $message->event_type,

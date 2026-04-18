@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Domain\Deposit\ValueObjects;
+namespace App\Domain\Shared\ValueObjects;
 
 final class BlockNumber
 {

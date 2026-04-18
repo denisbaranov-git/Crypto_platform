@@ -138,137 +138,6 @@ final class EloquentLedgerService implements LedgerService
         });
     }
 
-//    public function reserveFunds(
-//        int $userId,
-//        int $currencyNetworkId,
-//        string $amount,
-//        string $operationId,
-//        string $referenceType,
-//        ?int $referenceId = null,
-//        array $metadata = [],
-//        ?int $expiresInSeconds = null
-//    ): void {
-//        DB::transaction(function () use (
-//            $userId,
-//            $currencyNetworkId,
-//            $amount,
-//            $operationId,
-//            $referenceType,
-//            $referenceId,
-//            $metadata,
-//            $expiresInSeconds
-//        ): void {
-//            $account = EloquentAccount::query()
-//                ->where('owner_type', 'user')
-//                ->where('owner_id', $userId)
-//                ->where('currency_network_id', $currencyNetworkId)
-//                ->lockForUpdate()
-//                ->firstOrFail();
-//
-//            $available = bcsub((string) $account->balance, (string) $account->reserved_balance, 18);
-//
-//            if (bccomp($available, $amount, 18) < 0) {
-//                throw new DomainException('Insufficient available balance to reserve.');
-//            }
-//
-//            $account->reserved_balance = bcadd((string) $account->reserved_balance, $amount, 18);
-//            $account->version = ((int) $account->version) + 1;
-//            $account->save();
-//
-//            EloquentLedgerHold::create([
-//                'ledger_operation_id' => $operationId,
-//                'account_id' => $account->id,
-//                'currency_network_id' => $currencyNetworkId,
-//                'amount' => $amount,
-//                'status' => 'active',
-//                'reason' => 'withdrawal',
-//                'expires_at' => $expiresInSeconds ? now()->addSeconds($expiresInSeconds) : null,
-//                'metadata' => array_merge($metadata, [
-//                    'reference_type' => $referenceType,
-//                    'reference_id' => $referenceId,
-//                ]),
-//            ]);
-//        });
-//    }
-
-//    public function releaseFunds(
-//        int $holdId,
-//        string $operationId,
-//        string $referenceType,
-//        ?int $referenceId = null,
-//        array $metadata = []
-//    ): void {
-//        DB::transaction(function () use ($holdId): void {
-//            $hold = EloquentLedgerHold::query()
-//                ->whereKey($holdId)
-//                ->lockForUpdate()
-//                ->firstOrFail();
-//
-//            if ($hold->status !== 'active') {
-//                return;
-//            }
-//
-//            $account = EloquentAccount::query()
-//                ->whereKey($hold->account_id)
-//                ->lockForUpdate()
-//                ->firstOrFail();
-//
-//            $account->reserved_balance = bcsub((string) $account->reserved_balance, (string) $hold->amount, 18);
-//            $account->version = ((int) $account->version) + 1;
-//            $account->save();
-//
-//            $hold->status = 'released';
-//            $hold->released_at = now();
-//            $hold->save();
-//        });
-//    }
-
-//    public function consumeHold(
-//        int $holdId,
-//        string $operationId,
-//        string $referenceType,
-//        ?int $referenceId = null,
-//        array $metadata = []
-//    ): void {
-//        DB::transaction(function () use ($holdId, $operationId, $referenceType, $referenceId, $metadata): void {
-//            $hold = EloquentLedgerHold::query()
-//                ->whereKey($holdId)
-//                ->lockForUpdate()
-//                ->firstOrFail();
-//
-//            if ($hold->status !== 'active') {
-//                throw new DomainException('Only active hold can be consumed.');
-//            }
-//
-//            $account = EloquentAccount::query()
-//                ->whereKey($hold->account_id)
-//                ->lockForUpdate()
-//                ->firstOrFail();
-//
-//            $account->reserved_balance = bcsub((string) $account->reserved_balance, (string) $hold->amount, 18);
-//            $account->balance = bcsub((string) $account->balance, (string) $hold->amount, 18);
-//            $account->version = ((int) $account->version) + 1;
-//            $account->save();
-//
-//            $settlement = $this->systemAccounts->resolveByCode('clearing', $hold->currency_network_id);
-//
-//            $this->posting->post(
-//                idempotencyKey: $operationId,
-//                type: 'withdrawal_consume',
-//                referenceType: $referenceType,
-//                referenceId: $referenceId,
-//                lines: [
-//                    LedgerPostingLine::debit($account->id, (string) $hold->amount, ['side' => 'user']),
-//                    LedgerPostingLine::credit($settlement->id(), (string) $hold->amount, ['side' => 'settlement']),
-//                ],
-//                metadata: $metadata
-//            );
-//
-//            $hold->status = 'consumed';
-//            $hold->consumed_at = now();
-//            $hold->save();
-//        });
-//    }
     public function reserveFunds(
         int $userId,
         int $currencyNetworkId,
@@ -289,15 +158,16 @@ final class EloquentLedgerService implements LedgerService
             $metadata,
             $expiresInSeconds
         ): void {
+
             /**
              * 1) create/find operation header
              * operationId = idempotency key
              */
-            $operation = $this->findOrCreateOperation(
-                idempotencyKey: $operationId,
+            $operation = $this->findOrCreateOperation( //create LedgerOperation
+                idempotencyKey: $operationId,  //'withdrawal:' . $withdrawal->id()->value() . ':reserve';
                 type: 'withdrawal_reserve',
-                referenceType: $referenceType,
-                referenceId: $referenceId,
+                referenceType: $referenceType, //'withdrawal'
+                referenceId: $referenceId,     //$withdrawal->id()->value()
                 metadata: $metadata
             );
 
@@ -333,7 +203,7 @@ final class EloquentLedgerService implements LedgerService
                 'amount' => $amount,
                 'status' => 'active',
                 'reason' => 'withdrawal',
-                'expires_at' => $expiresInSeconds ? now()->addSeconds($expiresInSeconds) : null,
+                'expires_at' => $expiresInSeconds ? now()->addSeconds($expiresInSeconds) : null, // 900 sec = 15 min //denis  //needs to create a service for validate expires_at!!!!!!!!!
                 'metadata' => array_merge($metadata, [
                     'reference_type' => $referenceType,
                     'reference_id' => $referenceId,
@@ -374,7 +244,7 @@ final class EloquentLedgerService implements LedgerService
             /**
              * 1) create/find operation header
              */
-            $operation = $this->findOrCreateOperation(
+            $operation = $this->findOrCreateOperation( //create LedgerOperation
                 idempotencyKey: $operationId,
                 type: 'withdrawal_release',
                 referenceType: $referenceType,
@@ -466,10 +336,13 @@ final class EloquentLedgerService implements LedgerService
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            if ($hold->status === 'consumed') {
+                return;
+            }
+
             if ($hold->status !== 'active') {
                 throw new DomainException('Only active hold can be consumed.');
             }
-
             /**
              * 3) double-entry posting:
              *    - user debit
@@ -484,16 +357,11 @@ final class EloquentLedgerService implements LedgerService
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            /**
-             * if you prefer "settlement" in code, rename system account code later.
-             * for now we keep the already established code "clearing".
-             */
             $clearingAccount = $this->systemAccounts->resolveByCode('clearing', $hold->currency_network_id);
 
             if ($clearingAccount->id() === null) {
                 throw new DomainException('Clearing account is not persisted.');
             }
-
             /**
              * Posting happens inside the same DB transaction.
              * No nested DB::transaction inside posting service.
@@ -515,7 +383,6 @@ final class EloquentLedgerService implements LedgerService
                 ],
                 metadata: $metadata
             );
-
             /**
              * 4) only after successful posting:
              *    decrease reserved_balance
@@ -590,7 +457,6 @@ final class EloquentLedgerService implements LedgerService
             throw $e;
         }
     }
-
 
     public function transferInternal(
         int $fromUserId,

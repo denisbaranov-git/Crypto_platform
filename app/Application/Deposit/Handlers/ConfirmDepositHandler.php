@@ -45,6 +45,15 @@ final class ConfirmDepositHandler
                     continue;
                 }
 
+//                $networkId = $deposit->networkId();
+//                $externalKey =  $deposit->externalKey();
+//                $operationId = 'deposit-credit:' . $networkId . ':' . $externalKey;
+//                $creditDepositHandler->handle(new CreditDepositCommand(
+//                    depositId: $depositId,
+//                    operationId: $operationId,
+//                    metadata: $payload
+//                ));
+
                 $this->outbox->append(
                     idempotencyKey: 'deposit:' . $deposit->id()->value() . ':confirmed',
                     aggregateType: 'deposit',

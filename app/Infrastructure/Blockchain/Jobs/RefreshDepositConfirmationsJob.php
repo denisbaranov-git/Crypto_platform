@@ -30,8 +30,36 @@ final class RefreshDepositConfirmationsJob implements ShouldQueue
     ): void {
         $network = Network::query()->findOrFail($this->networkId);
         $cursor = $cursors->get($network->id);
-
-        $networkConfig = config("deposit.scanner.networks.{$network->code}", []);
+//config/deposit.php
+// return [
+//    'scanner' => [
+//        'default_safety_margin_blocks' => 12,
+//        'networks' => [
+//            'ethereum' => [
+//                'scan_interval_seconds' => 6,
+//                'safety_margin_blocks'   => 12,
+//                'reorg_window_blocks'    => 50,
+//            ],
+//            'tron' => [
+//                'scan_interval_seconds' => 5,
+//                'safety_margin_blocks'   => 20,
+//                'reorg_window_blocks'    => 50,
+//            ],
+//            'bitcoin' => [
+//                'scan_interval_seconds' => 30,
+//                'safety_margin_blocks'   => 6,
+//                'reorg_window_blocks'    => 100,
+//            ],
+//        ],
+//    ],
+//        'confirmations' => [
+//            'default_blocks' => 12,
+//        ],
+//    'evm' => [
+//            'transfer_signature' => '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
+//        ],
+//];
+        $networkConfig = config("deposit.scanner.networks.{$network->code}", []); //denis //move to DB
         $scanInterval = (int) ($networkConfig['scan_interval_seconds'] ?? 60);
 
         if ($cursor->scanned_at && $cursor->scanned_at->diffInSeconds(now()) < $scanInterval) {
@@ -40,7 +68,17 @@ final class RefreshDepositConfirmationsJob implements ShouldQueue
 
         $client = $clientFactory->forNetwork($network->id);
         $head = $client->headBlock();
-
+//        public function findOpenByNetwork(int $networkId, int $limit = 500): array
+//        {
+//            $rows = EloquentDeposit::query()
+//                ->where('network_id', $networkId)
+//                ->whereIn('status', ['detected', 'pending', 'confirmed'])
+//                ->orderBy('id')
+//                ->limit($limit)
+//                ->get();
+//
+//            return $rows->map(fn (EloquentDeposit $row) => $this->mapper->toEntity($row))->all();
+//        }
         $openDeposits = $deposits->findOpenByNetwork($network->id, 500);
 
         foreach ($openDeposits as $deposit) {

@@ -11,20 +11,21 @@ use App\Domain\Deposit\Events\DepositFailed;
 use App\Domain\Deposit\Events\DepositReorged;
 use App\Domain\Deposit\Exceptions\DepositAlreadyCredited;
 use App\Domain\Deposit\Exceptions\InvalidDepositTransition;
-use App\Domain\Deposit\ValueObjects\BlockNumber;
 use App\Domain\Deposit\ValueObjects\ConfirmationRequirement;
 use App\Domain\Deposit\ValueObjects\DepositId;
 use App\Domain\Deposit\ValueObjects\DepositStatus;
-use App\Domain\Deposit\ValueObjects\ExternalKey;
-use App\Domain\Deposit\ValueObjects\TransactionHash;
 use App\Domain\Shared\RecordsDomainEvents;
+use App\Domain\Shared\ValueObjects\BlockNumber;
+use App\Domain\Shared\ValueObjects\ExternalKey;
+//use App\Domain\Shared\ValueObjects\TransactionHash;
+use App\Domain\Shared\ValueObjects\TxId;
 
 final class Deposit
 {
     use RecordsDomainEvents;
 
     /** @var array<object> */
-    private array $domainEvents = [];
+    //private array $domainEvents = [];
 
     private function __construct(
         private ?DepositId $id,
@@ -33,11 +34,12 @@ final class Deposit
         private int $currencyNetworkId,
         private int $walletAddressId,
         private ExternalKey $externalKey,
-        private TransactionHash $txid,
+        private TxId $txid,
         private string $amount,
         private string $toAddress,
         private DepositStatus $status,
         private ?string $fromAddress = null,
+        //denis this must throw out from Deposit entity
         private ?string $blockHash = null,
         private ?BlockNumber $blockNumber = null,
         private int $confirmations = 0,
@@ -71,7 +73,7 @@ final class Deposit
         int $currencyNetworkId,
         int $walletAddressId,
         ExternalKey $externalKey,
-        TransactionHash $txid,
+        TxId $txid,
         string $amount,
         string $toAddress,
         ?string $fromAddress = null,
@@ -117,7 +119,7 @@ final class Deposit
         int $currencyNetworkId,
         int $walletAddressId,
         ExternalKey $externalKey,
-        TransactionHash $txid,
+        TxId $txid,
         string $amount,
         string $toAddress,
         DepositStatus $status,
@@ -254,7 +256,7 @@ final class Deposit
             depositId: $this->id?->value(),
             networkId: $this->networkId,
             externalKey: $this->externalKey->value(),
-            txid: $this->txid->value(),
+            txid: $this->txid?->value() ?? '',
         ));
     }
 
@@ -433,7 +435,7 @@ final class Deposit
     public function currencyNetworkId(): int { return $this->currencyNetworkId; }
     public function walletAddressId(): int { return $this->walletAddressId; }
     public function externalKey(): ExternalKey { return $this->externalKey; }
-    public function txid(): TransactionHash { return $this->txid; }
+    public function txid(): TxId { return $this->txid; }
     public function amount(): string { return $this->amount; }
     public function toAddress(): string { return $this->toAddress; }
     public function fromAddress(): ?string { return $this->fromAddress; }

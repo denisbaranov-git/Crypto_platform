@@ -3,8 +3,6 @@
 namespace App\Infrastructure\Persistence\Eloquent\Models;
 
 use App\Domain\Wallet\Entities\WalletAddress;
-use App\Models\EloquentCurrencyNetwork;
-use App\Models\EloquentWalletAddress;
 use Illuminate\Database\Eloquent\Model;
 
 class EloquentWallet extends Model

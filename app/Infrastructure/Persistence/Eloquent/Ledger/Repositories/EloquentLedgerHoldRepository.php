@@ -9,14 +9,6 @@ use App\Domain\Ledger\Repositories\LedgerHoldRepository;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentLedgerHold;
 use Illuminate\Support\Facades\DB;
 
-/**
- * Реализация holds repository через Eloquent.
- *
- * Почему здесь:
- * - есть знание о таблице;
- * - есть ORM;
- * - есть row locking.
- */
 final class EloquentLedgerHoldRepository implements LedgerHoldRepository
 {
     public function findById(int $id): ?LedgerHold
@@ -35,16 +27,39 @@ final class EloquentLedgerHoldRepository implements LedgerHoldRepository
 
         return $model ? $this->toDomain($model) : null;
     }
-
-    public function findActiveByLedgerOperationId(string $ledgerOperationId): ?LedgerHold
+    public function findByLedgerOperationId(string $ledgerOperationId): ?LedgerHold
     {
         $model = EloquentLedgerHold::query()
             ->where('ledger_operation_id', $ledgerOperationId)
-            ->where('status', 'active')
             ->first();
 
-        return $model ? $this->toDomain($model) : null;
+        if (! $model) {
+            return null;
+        }
+
+        return new LedgerHold(
+            id: (int) $model->id,
+            ledgerOperationId: (string) $model->ledger_operation_id,
+            accountId: (int) $model->account_id,
+            currencyNetworkId: (int) $model->currency_network_id,
+            amount: (string) $model->amount,
+            status: (string) $model->status,
+            reason: $model->reason,
+            expiresAt: $model->expires_at?->toDateTimeString(),
+            releasedAt: $model->released_at?->toDateTimeString(),
+            consumedAt: $model->consumed_at?->toDateTimeString(),
+            metadata: $model->metadata ?? [],
+        );
     }
+//    public function findActiveByLedgerOperationId(string $ledgerOperationId): ?LedgerHold
+//    {
+//        $model = EloquentLedgerHold::query()
+//            ->where('ledger_operation_id', $ledgerOperationId)
+//            ->where('status', 'active')
+//            ->first();
+//
+//        return $model ? $this->toDomain($model) : null;
+//    }
 
     public function save(LedgerHold $hold): LedgerHold
     {

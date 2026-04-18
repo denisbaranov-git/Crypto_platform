@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Models;
+namespace App\Infrastructure\Persistence\Eloquent\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
@@ -27,6 +27,6 @@ class EloquentWalletAddress extends Model
     ];
     public function wallet()
     {
-        return $this->belongsTo(Wallet::class);
+        return $this->belongsTo(EloquentWallet::class);
     }
 }

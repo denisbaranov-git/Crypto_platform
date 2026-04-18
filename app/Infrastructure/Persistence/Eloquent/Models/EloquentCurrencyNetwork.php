@@ -2,8 +2,6 @@
 
 namespace App\Infrastructure\Persistence\Eloquent\Models;
 
-use App\Infrastructure\Persistence\Eloquent\Models\EloquentCurrency;
-use App\Infrastructure\Persistence\Eloquent\Models\EloquentNetwork;
 use Illuminate\Database\Eloquent\Model;
 
 class EloquentCurrencyNetwork extends Model

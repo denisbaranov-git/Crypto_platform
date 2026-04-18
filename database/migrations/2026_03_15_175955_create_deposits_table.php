@@ -40,8 +40,11 @@ return new class extends Migration
              * Operation IDs.
              * Один депозит может быть credited один раз и reversed один раз.
              */
+
             $table->string('credited_operation_id', 120)->nullable();
             $table->string('reversal_operation_id', 120)->nullable();
+
+            //////////////////////////////////////////////////this is need throw out to some Reorgs table
             /**
              * Reorg lifecycle.
              */

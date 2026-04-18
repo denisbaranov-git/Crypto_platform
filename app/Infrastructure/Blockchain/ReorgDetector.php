@@ -2,13 +2,12 @@
 
 namespace App\Infrastructure\Blockchain;
 
-use App\Domain\Deposit\Events\DepositConfirmed;
 use App\Domain\Deposit\Events\DepositReorged;
 use App\Domain\Deposit\Repositories\DepositRepository;
 use App\Domain\Shared\Outbox\OutboxRepository;
+use App\Domain\Shared\ValueObjects\BlockNumber;
 use App\Infrastructure\Blockchain\Contracts\BlockchainClient;
 use App\Infrastructure\Persistence\Eloquent\Repositories\NetworkScannerCursorRepository;
-use App\Domain\Deposit\ValueObjects\BlockNumber;
 use Illuminate\Support\Facades\DB;
 
 final class ReorgDetector

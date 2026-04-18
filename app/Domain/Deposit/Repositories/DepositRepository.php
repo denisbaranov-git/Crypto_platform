@@ -4,13 +4,14 @@ namespace App\Domain\Deposit\Repositories;
 
 use App\Domain\Deposit\Entities\Deposit;
 use App\Domain\Deposit\ValueObjects\DepositId;
-use App\Domain\Deposit\ValueObjects\ExternalKey;
+use App\Domain\Shared\ValueObjects\ExternalKey;
 
 interface DepositRepository
 {
     public function save(Deposit $deposit): Deposit;
 
     public function findById(DepositId $id): ?Deposit;
+    public function lockById(DepositId $id): ?Deposit;
 
     public function findByExternalKey(int $networkId, ExternalKey $externalKey): ?Deposit;
 

@@ -4,7 +4,7 @@
 namespace App\Infrastructure\Persistence\Eloquent\Deposit\Repositories;
 
 use App\Domain\Deposit\Services\DepositUniquenessChecker;
-use App\Domain\Deposit\ValueObjects\ExternalKey;
+use App\Domain\Shared\ValueObjects\ExternalKey;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentDeposit;
 
 final class EloquentDepositUniquenessChecker implements DepositUniquenessChecker

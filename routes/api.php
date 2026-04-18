@@ -4,6 +4,7 @@ use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\MeController;
 use App\Http\Controllers\Api\MobileAuthController;
 use App\Http\Controllers\Api\WalletController;
+use App\Http\Controllers\Api\WithdrawalController;
 use Illuminate\Support\Facades\Route;
 
 // Mobile auth endpoints (token flow).
@@ -21,4 +22,13 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/dashboard', DashboardController::class)->name('api.dashboard');
     Route::get('/wallets', [WalletController::class, 'index'])->name('api.wallets.index');
     Route::get('/wallets/{wallet}', [WalletController::class, 'show'])->name('api.wallets.show');
+
+    Route::prefix('withdrawals')->group(function (): void {
+        Route::get('/', [WithdrawalController::class, 'index']);
+        Route::post('/', [WithdrawalController::class, 'store']);
+        Route::get('{withdrawal}', [WithdrawalController::class, 'show']);
+        Route::post('{withdrawal}/cancel', [WithdrawalController::class, 'cancel']);
+        Route::post('{withdrawal}/retry-broadcast', [WithdrawalController::class, 'retryBroadcast']);
+    });
+
 });
