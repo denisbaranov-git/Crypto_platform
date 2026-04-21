@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Infrastructure\Persistence\Eloquent\Repositories;
+namespace App\Infrastructure\Blockchain\Scanner\Repositories;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentNetworkScannerCursor;
 
 final class NetworkScannerCursorRepository
@@ -35,5 +35,14 @@ final class NetworkScannerCursorRepository
         $cursor->last_processed_block_hash = null;
         $cursor->scanned_at = now();
         $cursor->save();
+    }
+    public function touch(int $networkId, array $attributes = []): void
+    {
+        EloquentNetworkScannerCursor::query()->updateOrCreate(
+            ['network_id' => $networkId],
+            array_merge([
+                'scanned_at' => now(),
+            ], $attributes)
+        );
     }
 }
