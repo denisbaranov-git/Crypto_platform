@@ -1,0 +1,12 @@
+Transfers / Internal Movements
+
+Внутриплатформенные переводы между пользователями.
+
+Смысл: внутреннее перемещение стоимости без блокчейна.
+
+
+двойная запись (debit/credit)
+idempotency
+race conditions
+комиссии
+интеграция с Ledger

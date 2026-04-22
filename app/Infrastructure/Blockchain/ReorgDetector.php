@@ -7,7 +7,7 @@ use App\Domain\Deposit\Repositories\DepositRepository;
 use App\Domain\Shared\Outbox\OutboxRepository;
 use App\Domain\Shared\ValueObjects\BlockNumber;
 use App\Infrastructure\Blockchain\Contracts\BlockchainClient;
-use App\Infrastructure\Persistence\Eloquent\Repositories\NetworkScannerCursorRepository;
+use App\Infrastructure\Blockchain\Repositories\NetworkScannerCursorRepository;
 use Illuminate\Support\Facades\DB;
 
 final class ReorgDetector

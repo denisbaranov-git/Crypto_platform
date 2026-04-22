@@ -4,12 +4,15 @@ declare(strict_types=1);
 
 namespace App\Infrastructure\Withdrawal\Services;
 
-use App\Domain\Shared\ValueObjects\Amount;
 use App\Domain\Withdrawal\Services\WithdrawalFeeCalculator;
+use App\Domain\Shared\ValueObjects\Amount;
 use App\Domain\Withdrawal\ValueObjects\WithdrawalFeeSnapshot;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentFeeRule;
 use DomainException;
 
+/**
+ * WithdrawalFeeCalculator выбирает fee_rule
+ */
 final class EloquentWithdrawalFeeCalculator implements WithdrawalFeeCalculator
 {
     public function quote(int $currencyNetworkId, Amount $amount, array $context = []): WithdrawalFeeSnapshot
@@ -27,7 +30,7 @@ final class EloquentWithdrawalFeeCalculator implements WithdrawalFeeCalculator
             ->first();
 
         if (! $rule) {
-            throw new DomainException('No fee rule found for this currency-network pair.');
+            throw new DomainException('No fee rule found for withdrawal.');
         }
 
         return new WithdrawalFeeSnapshot(

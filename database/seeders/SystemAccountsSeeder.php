@@ -7,7 +7,7 @@ namespace Database\Seeders;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentSystemAccount;
 use Illuminate\Database\Seeder;
 
-final class SystemAccountSeeder extends Seeder
+final class SystemAccountsSeeder extends Seeder
 {
     public function run(): void
     {
@@ -46,7 +46,9 @@ final class SystemAccountSeeder extends Seeder
                     'name' => $item['name'],
                     'purpose' => $item['purpose'],
                     'is_active' => true,
-                    'metadata' => [],
+                    'metadata' => json_encode([], JSON_THROW_ON_ERROR),
+                    'updated_at' => now(),
+                    'created_at' => now(),
                 ]
             );
         }

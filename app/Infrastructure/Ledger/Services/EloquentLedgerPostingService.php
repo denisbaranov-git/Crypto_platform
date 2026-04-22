@@ -23,6 +23,19 @@ final class EloquentLedgerPostingService implements LedgerPostingService
      * - метод не создаёт DB::transaction();
      * - вызывается только из use-case service внутри уже открытой транзакции.
      */
+    /**
+     $this->posting->post(
+          idempotencyKey: $operationId,
+          type: 'deposit_credit',
+          referenceType: 'deposit',
+          referenceId: $depositId,
+          lines: [
+          LedgerPostingLine::credit($userAccount->id, (string) $deposit->amount, ['side' => 'user']),
+          LedgerPostingLine::debit($clearing->id(), (string) $deposit->amount, ['side' => 'clearing']),
+          ],
+          metadata: $metadata
+     );
+    */
     public function post(
         string $idempotencyKey,
         string $type,

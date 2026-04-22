@@ -16,7 +16,9 @@ return [
         ],
     ],
 
-    'confirmations' => [
-        'default_blocks' => 12,
+    'recovery' => [
+        'stale_reserved_minutes' => 15,
+        'stale_broadcasted_minutes' => 10,
+        'stale_settled_minutes' => 10,
     ],
 ];

@@ -1,0 +1,10 @@
+Payments / Fiat On-Ramp
+
+Пополнение через Stripe/Adyen/Moonpay и последующая конвертация fiat → crypto.
+
+Смысл: внешние платежи, их статусы, сверка, chargeback/reconciliation.
+
+Сюда:
+
+fiat_payments
+fiat_crypto_conversions

@@ -17,6 +17,19 @@ use Illuminate\Http\Request;
 
 final class WithdrawalController extends Controller
 {
+    // Важно: wallet API должен отдавать network_id и currency_network_id.
+
+
+    //Нужно что бы API GET /api/wallets отдаёт для каждого wallet хотя бы:
+    //
+    //id
+    //currency_code
+    //network_code
+    //network_id
+    //currency_network_id
+    //available_balance
+    //locked_balance
+    //active_address
     public function index(Request $request): JsonResponse
     {
         $userId = (int) $request->user()->id;
@@ -46,6 +59,25 @@ final class WithdrawalController extends Controller
         return response()->json($model);
     }
 
+    /**
+     * @param RequestWithdrawalRequest $request
+     * @param RequestWithdrawalHandler $handler
+     * @return JsonResponse
+     * Request
+     *
+     * POST /api/withdrawals
+     *
+     * request validation
+     * VO validation
+     * business policy validation
+     * fee rule selection
+     * fee amount calculation
+     * total debit calculation
+     * withdrawal creation
+     * reserveFunds()
+     * ledger_hold_id binding
+     * withdrawal status becomes reserved
+     */
     public function store(
         RequestWithdrawalRequest $request,
         RequestWithdrawalHandler $handler
@@ -53,9 +85,6 @@ final class WithdrawalController extends Controller
         $withdrawalId = $handler->handle( //new RequestWithdrawalCommand
             $request->toCommand((int) $request->user()->id)  //<<<---idempotencyKey: (string) $this->input('idempotency_key'),!!!!!
         );
-
-        // CHANGED: after the DB transaction is finished, kick off broadcast.
-        dispatch(new BroadcastWithdrawalJob($withdrawalId));
 
         return response()->json(
             EloquentWithdrawal::query()->findOrFail($withdrawalId),

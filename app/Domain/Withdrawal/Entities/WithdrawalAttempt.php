@@ -9,28 +9,24 @@ use App\Domain\Withdrawal\Events\WithdrawalAttemptBroadcasted;
 use App\Domain\Withdrawal\Events\WithdrawalAttemptFailed;
 use App\Domain\Withdrawal\Events\WithdrawalAttemptConfirmed;
 use App\Domain\Withdrawal\Events\WithdrawalAttemptStarted;
-use App\Domain\Withdrawal\ValueObjects\WithdrawalStatus;
 use DomainException;
 
-/**
- * CHANGED:
- * - attempt now has its own lifecycle;
- * - start/broadcast/fail/confirm are explicit;
- * - useful for retry/recovery/history.
- */
 final class WithdrawalAttempt
 {
     use RecordsDomainEvents;
-
+    /** @var array<int, object> */
     private array $recordedEvents = [];
 
     public function __construct(
         private ?int $id,
         private int $withdrawalId,
         private int $attemptNo,
-        private string $status = 'pending', // pending | broadcasting | broadcasted | failed | confirmed
+        private string $status = 'pending',
+        private ?string $broadcastFingerprint = null,
         private ?string $txid = null,
         private ?string $broadcastDriver = null,
+        private ?string $rawTransactionHash = null,
+        private ?string $rawTransaction = null,
         private array $requestPayload = [],
         private array $responsePayload = [],
         private ?string $errorMessage = null,
@@ -39,6 +35,27 @@ final class WithdrawalAttempt
         private ?string $failedAt = null,
     ) {
         $this->assertInvariant();
+    }
+
+    public static function hydrate(array $data): self
+    {
+        return new self(
+            id: isset($data['id']) ? (int) $data['id'] : null,
+            withdrawalId: (int) ($data['withdrawal_id'] ?? 0),
+            attemptNo: (int) ($data['attempt_no'] ?? 0),
+            status: (string) ($data['status'] ?? 'pending'),
+            broadcastFingerprint: $data['broadcast_fingerprint'] ?? null,
+            txid: $data['txid'] ?? null,
+            broadcastDriver: $data['broadcast_driver'] ?? null,
+            rawTransactionHash: $data['raw_transaction_hash'] ?? null,
+            rawTransaction: $data['raw_transaction'] ?? null,
+            requestPayload: (array) ($data['request_payload'] ?? []),
+            responsePayload: (array) ($data['response_payload'] ?? []),
+            errorMessage: $data['error_message'] ?? null,
+            broadcastedAt: $data['broadcasted_at'] ?? null,
+            confirmedAt: $data['confirmed_at'] ?? null,
+            failedAt: $data['failed_at'] ?? null,
+        );
     }
 
     public static function start(
@@ -69,14 +86,32 @@ final class WithdrawalAttempt
     public function withdrawalId(): int { return $this->withdrawalId; }
     public function attemptNo(): int { return $this->attemptNo; }
     public function status(): string { return $this->status; }
+    public function broadcastFingerprint(): ?string { return $this->broadcastFingerprint; }
     public function txid(): ?string { return $this->txid; }
     public function broadcastDriver(): ?string { return $this->broadcastDriver; }
+    public function rawTransactionHash(): ?string { return $this->rawTransactionHash; }
+    public function rawTransaction(): ?string { return $this->rawTransaction; }
     public function requestPayload(): array { return $this->requestPayload; }
     public function responsePayload(): array { return $this->responsePayload; }
     public function errorMessage(): ?string { return $this->errorMessage; }
     public function broadcastedAt(): ?string { return $this->broadcastedAt; }
     public function confirmedAt(): ?string { return $this->confirmedAt; }
     public function failedAt(): ?string { return $this->failedAt; }
+
+    public function storePreparedTransaction(
+        string $fingerprint,
+        string $rawTransactionHash,
+        string $rawTransaction
+    ): void {
+        if ($this->status !== 'broadcasting') {
+            throw new DomainException('Only broadcasting attempt can store prepared transaction.');
+        }
+
+        $this->broadcastFingerprint = $fingerprint;
+        $this->rawTransactionHash = $rawTransactionHash;
+        $this->rawTransaction = $rawTransaction;
+        $this->assertInvariant();
+    }
 
     public function markBroadcasted(string $txid, array $responsePayload = []): void
     {
@@ -102,7 +137,7 @@ final class WithdrawalAttempt
     public function markFailed(string $errorMessage): void
     {
         if ($this->status === 'confirmed') {
-            throw new DomainException('Confirmed attempt cannot be failed.');
+            throw new DomainException('Confirmed attempt cannot fail.');
         }
 
         $this->status = 'failed';

@@ -10,8 +10,10 @@ use App\Application\Deposit\Handlers\CreditDepositHandler;
 use App\Application\Deposit\Handlers\ReverseDepositCreditHandler;
 use App\Application\Withdrawal\Commands\BroadcastWithdrawalCommand;
 use App\Application\Withdrawal\Commands\ConsumeWithdrawalHoldCommand;
+use App\Application\Withdrawal\Commands\DebitWithdrawalCommand;
 use App\Application\Withdrawal\Handlers\BroadcastWithdrawalHandler;
 use App\Application\Withdrawal\Handlers\ConsumeWithdrawalHoldHandler;
+use App\Application\Withdrawal\Handlers\DebitWithdrawalHandler;
 use App\Domain\Deposit\Events\DepositConfirmed;
 use App\Domain\Deposit\Events\DepositReorged;
 use App\Domain\Shared\Outbox\OutboxRepository;
@@ -70,48 +72,6 @@ final class OutboxRelayJob implements ShouldQueue
                         depositId: $depositId,
                         metadata: $payload
                     ));
-                } elseif ($message->event_type === WithdrawalReserved::class) {
-                    $withdrawalId = (int) ($payload['withdrawalId'] ?? 0);
-
-                    if ($withdrawalId <= 0) {
-                        throw new \DomainException('Invalid WithdrawalReserved payload.');
-                    }
-
-                    $broadcastWithdrawalHandler->handle(new BroadcastWithdrawalCommand(
-                        withdrawalId: $withdrawalId,
-                        //operationId: 'withdrawal:' . $withdrawalId . ':broadcast',
-                        metadata: $payload
-                    ));
-                } elseif ($message->event_type === WithdrawalBroadcasted::class) {
-                    $withdrawalId = (int) ($payload['withdrawalId'] ?? 0);
-                    $holdId = (int) ($payload['holdId'] ?? 0);
-
-                    if ($withdrawalId <= 0 || $holdId <= 0) {
-                        throw new \DomainException('Invalid WithdrawalBroadcasted payload.');
-                    }
-
-                    $consumeWithdrawalHoldHandler->handle(new ConsumeWithdrawalHoldCommand(
-                        withdrawalId: $withdrawalId,
-                        holdId: $holdId,
-                        operationId: 'withdrawal:' . $withdrawalId . ':consume',
-                        metadata: $payload
-                    ));
-
-                    //denis // notify user / webhook
-
-                } elseif (
-                    $message->event_type === WithdrawalConfirmed::class) {
-                    logger()->info('Withdrawal lifecycle event dispatched', [
-                        'event_type' => $message->event_type,
-                        'idempotency_key' => $message->idempotency_key,
-                    ]);
-                    //denis // final success
-
-                } elseif ($message->event_type === WithdrawalFailed::class) {
-                    logger()->info('Withdrawal lifecycle event dispatched - Failed', [
-                        'event_type' => $message->event_type,
-                        'idempotency_key' => $message->idempotency_key,
-                    ]);
                 } else {
                     logger()->error('Unknown outbox event type', [
                         'event_type' => $message->event_type,

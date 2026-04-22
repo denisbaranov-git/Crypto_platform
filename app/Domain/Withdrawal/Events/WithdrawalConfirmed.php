@@ -8,8 +8,9 @@ final readonly class WithdrawalConfirmed
 {
     public function __construct(
         public int $withdrawalId,
-        public int $networkId,
-        public string $externalKey,
         public string $txid,
+        public int $confirmations,
+        public int $blockNumber,
+        public string $blockHash,
     ) {}
 }

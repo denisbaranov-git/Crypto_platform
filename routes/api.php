@@ -28,7 +28,7 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('/', [WithdrawalController::class, 'store']);
         Route::get('{withdrawal}', [WithdrawalController::class, 'show']);
         Route::post('{withdrawal}/cancel', [WithdrawalController::class, 'cancel']);
-        Route::post('{withdrawal}/retry-broadcast', [WithdrawalController::class, 'retryBroadcast']);
+        //Route::post('{withdrawal}/retry-broadcast', [WithdrawalController::class, 'retryBroadcast']);
     });
 
 });

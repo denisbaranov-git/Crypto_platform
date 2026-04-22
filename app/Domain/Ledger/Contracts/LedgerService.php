@@ -11,7 +11,6 @@ interface LedgerService
         string $operationId,
         array $metadata = []
     ): void;
-
     public function reverseDepositCredit(
         int $depositId,
         array $metadata = []

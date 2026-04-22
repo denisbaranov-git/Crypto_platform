@@ -35,7 +35,7 @@ final class ConfirmWithdrawalHandler
 //            if ($command->confirmations < $required) {
 //                return;
 //            }
-            if ( $withdrawal->status()  !== WithdrawalStatus::SETTLED) { /// denis проверить установку статуса!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
+            if ( $withdrawal->status()  !== WithdrawalStatus::SETTLED) { /// denis проверить установку статуса!! Этот статус НЕ НУЖЕН!!!!!!!!!! только BROADCASTED
                 throw new \RuntimeException('Withdrawal can be confirmed only from settled state.');
             }
             $withdrawal->markConfirmed();
@@ -56,7 +56,7 @@ final class ConfirmWithdrawalHandler
                         'withdrawalId' => $withdrawal->id()->value(),
                         'networkId' => $withdrawal->networkId(),
 
-                        'externalKey' => $withdrawal->externalKey(), //denis// externalKey!!!!!!!!!!!!!!!!!!!!!!!!!!!
+                        'externalKey' => $withdrawal->externalKey(),
                         'blockNumber' => $withdrawal->blockNumber()?->value(),
                         'txid' => $withdrawal->txid(),
                     ]

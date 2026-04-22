@@ -6,5 +6,5 @@ use Illuminate\Database\Eloquent\Model;
 
 class EloquentNetwork extends Model
 {
-    //
+    protected $table = 'networks';
 }

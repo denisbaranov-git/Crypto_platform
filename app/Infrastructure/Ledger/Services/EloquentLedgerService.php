@@ -13,6 +13,7 @@ use App\Infrastructure\Persistence\Eloquent\Models\EloquentAccount;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentDeposit;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentLedgerHold;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentLedgerOperation;
+use App\Infrastructure\Persistence\Eloquent\Models\EloquentWithdrawal;
 use DomainException;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
@@ -299,6 +300,13 @@ final class EloquentLedgerService implements LedgerService
         });
     }
 
+    /**
+        LedgerService::consumeHold():
+            уменьшает reserved_balance
+            пишет double-entry через LedgerPostingService
+            hold → consumed
+            withdrawal → settled //denis  //нужен ли?
+     */
     public function consumeHold(
         int $holdId,
         string $operationId,
@@ -371,16 +379,8 @@ final class EloquentLedgerService implements LedgerService
                 type: 'withdrawal_consume',
                 referenceType: $referenceType,
                 referenceId: $referenceId,
-                lines: [
-                    LedgerPostingLine::debit($userAccount->id, (string) $hold->amount, [
-                        'side' => 'user',
-                        'hold_id' => $hold->id,
-                    ]),
-                    LedgerPostingLine::credit($clearingAccount->id(), (string) $hold->amount, [
-                        'side' => 'clearing',
-                        'hold_id' => $hold->id,
-                    ]),
-                ],
+                lines: [LedgerPostingLine::debit($userAccount->id, (string) $hold->amount, ['side' => 'user', 'hold_id' => $hold->id,]),
+                        LedgerPostingLine::credit($clearingAccount->id(), (string) $hold->amount, ['side' => 'clearing', 'hold_id' => $hold->id,])],
                 metadata: $metadata
             );
             /**
@@ -418,7 +418,54 @@ final class EloquentLedgerService implements LedgerService
             $operation->save();
         });
     }
+    public function reverseWithdrawalConsumption(
+        int $withdrawalId,
+        array $metadata = []
+    ): void {
+        DB::transaction(function () use ($withdrawalId, $metadata): void {
+            $withdrawal = EloquentWithdrawal::query()
+                ->whereKey($withdrawalId)
+                ->lockForUpdate()
+                ->firstOrFail();
 
+            if (empty($withdrawal->consume_operation_id)) {
+                return;
+            }
+
+            if (! empty($withdrawal->reversal_operation_id)) {
+                return;
+            }
+
+            $userAccount = EloquentAccount::query()
+                ->where('owner_type', 'user')
+                ->where('owner_id', $withdrawal->user_id)
+                ->where('currency_network_id', $withdrawal->currency_network_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $clearing = $this->systemAccounts->resolveByCode('clearing', $withdrawal->currency_network_id);
+
+            $operationId = 'withdrawal:' . $withdrawal->id . ':reversal';
+
+            $this->posting->post(
+                idempotencyKey: $operationId,
+                type: 'withdrawal_reversal',
+                referenceType: 'withdrawal',
+                referenceId: $withdrawalId,
+                lines: [
+                    LedgerPostingLine::debit($clearing->id(), (string) $withdrawal->amount, ['side' => 'clearing']),
+                    LedgerPostingLine::credit($userAccount->id, (string) $withdrawal->amount, ['side' => 'user']),
+                ],
+                metadata: $metadata
+            );
+
+            $withdrawal->reversal_operation_id = $operationId;
+            $withdrawal->reversed_at = now();
+            $withdrawal->reversal_reason = $metadata['reason'] ?? 'chain_reorg';
+            $withdrawal->status = 'reversed';
+            $withdrawal->save();
+        });
+    }
     private function findOrCreateOperation(
         string $idempotencyKey,
         string $type,

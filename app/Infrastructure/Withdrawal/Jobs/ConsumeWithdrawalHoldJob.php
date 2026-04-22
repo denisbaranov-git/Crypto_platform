@@ -7,10 +7,24 @@ namespace App\Infrastructure\Withdrawal\Jobs;
 
 use App\Application\Withdrawal\Commands\ConsumeWithdrawalHoldCommand;
 use App\Application\Withdrawal\Handlers\ConsumeWithdrawalHoldHandler;
+use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
 
-final class ConsumeWithdrawalHoldJob implements ShouldQueue
+/**
+ * ConsumeWithdrawalHoldJob
+ *
+ * if  Case A: broadcast succeeded, consume failed
+ * Withdrawal:
+ * status = broadcasted
+ * txid != null
+ * consume_operation_id = null
+ *
+ * Recovery job:
+ * dispatch ConsumeWithdrawalHoldJob
+ * --------------------------------------------------
+ */
+final class ConsumeWithdrawalHoldJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
 {
     use Queueable;
 
@@ -20,6 +34,11 @@ final class ConsumeWithdrawalHoldJob implements ShouldQueue
     public function __construct(
         public int $withdrawalId,
     ) {}
+
+    public function uniqueId(): string
+    {
+        return 'withdrawal:' . $this->withdrawalId . ':consume';
+    }
 
     public function handle(ConsumeWithdrawalHoldHandler $handler): void
     {

@@ -4,9 +4,13 @@ import { useAuthStore } from '@/stores/auth'
 import { useDashboardStore } from '@/stores/dashboard'
 import StatCard from '@/components/StatCard.vue'
 import WalletCard from '@/components/WalletCard.vue'
+import WithdrawalStatusBadge from '@/components/WithdrawalStatusBadge.vue'
+import { useWithdrawalsStore } from '@/stores/Withdrawals'
 
 const auth = useAuthStore()
 const dashboard = useDashboardStore()
+const withdrawalsStore = useWithdrawalsStore()
+
 
 const selectedNetwork = ref('all')
 const search = ref('')
@@ -115,17 +119,46 @@ const filteredWallets = computed(() => {
 
         <div class="grid gap-4 md:grid-cols-2">
             <section class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-                <h2 class="mb-4 text-lg font-semibold">Recent deposits</h2>
-
+                <div class="mb-4 flex items-center justify-between">
+                    <h2 class="text-lg font-semibold">Recent deposits</h2>
+                    <RouterLink to="/deposits" class="text-xs text-slate-400 hover:text-white">
+                        View all
+                    </RouterLink>
+                </div>
                 <p v-if="!dashboard.recentDeposits.length" class="text-sm text-slate-400">
                     No deposits yet.
                 </p>
             </section>
 
             <section class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-                <h2 class="mb-4 text-lg font-semibold">Recent withdrawals</h2>
-                <p class="text-sm text-slate-400">Coming next.</p>
+                <div class="mb-4 flex items-center justify-between">
+                    <h2 class="text-lg font-semibold">Recent withdrawals</h2>
+                    <RouterLink to="/withdrawals" class="text-xs text-slate-400 hover:text-white">
+                        View all
+                    </RouterLink>
+                </div>
+
+                <p v-if="!withdrawalsStore.withdrawals.length" class="text-sm text-slate-400">
+                    No withdrawals yet.
+                </p>
+
+                <div v-else class="space-y-3">
+                    <div
+                        v-for="w in withdrawalsStore.withdrawals"
+                        :key="w.id"
+                        class="rounded-xl bg-slate-950 px-4 py-3 text-sm"
+                    >
+                        <div class="flex items-center justify-between gap-3">
+                            <div class="font-medium">{{ w.amount }}</div>
+                            <WithdrawalStatusBadge :status="w.status" />
+                        </div>
+                        <div class="mt-1 break-all text-xs text-slate-500">
+                            {{ w.destination_address }}
+                        </div>
+                    </div>
+                </div>
             </section>
         </div>
+
     </div>
 </template>

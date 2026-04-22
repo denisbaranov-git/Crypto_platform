@@ -23,7 +23,7 @@ final class EloquentWithdrawalRepository implements WithdrawalRepository
                 ? EloquentWithdrawal::query()->lockForUpdate()->findOrFail($withdrawal->id()->value())
                 : new EloquentWithdrawal();
 
-            $this->mapper->fillModel($model, $withdrawal);
+            $this->mapper->toModel($model, $withdrawal);
             $model->save();
 
             return $this->mapper->toDomain($model->refresh());

@@ -4,32 +4,25 @@ declare(strict_types=1);
 
 namespace App\Application\Withdrawal\Handlers;
 
-use App\Application\Withdrawal\Commands\ConfirmWithdrawalCommand;
+use App\Application\Withdrawal\Commands\HandleWithdrawalReorgCommand;
 use App\Application\Withdrawal\Commands\UpdateWithdrawalConfirmationsCommand;
 use App\Domain\Withdrawal\Repositories\WithdrawalRepository;
 use App\Domain\Withdrawal\Services\WithdrawalConfirmationRequirementResolver;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 
-/**
- * CHANGED:
- * - confirmation is operational/read-model status;
- * - it does not move money;
- * - it only flips withdrawal to confirmed after required depth/finality.
- */
 final class UpdateWithdrawalConfirmationsHandler
 {
     public function __construct(
-        private readonly WithdrawalRepository $withdrawalsRepo,
+        private readonly WithdrawalRepository $withdrawals,
         private readonly WithdrawalConfirmationRequirementResolver $requirements,
-        //private readonly CanBeDebitedPolicy $canBeDebitedPolicy,
-        private readonly ConfirmWithdrawalHandler $confirmWithdrawalHandler,
+        private readonly HandleWithdrawalReorgHandler $handleReorg,
     ) {}
 
     public function handle(UpdateWithdrawalConfirmationsCommand $command): void
     {
         DB::transaction(function () use ($command): void {
-            $withdrawal = $this->withdrawalsRepo->lockById($command->withdrawalId);
+            $withdrawal = $this->withdrawals->lockById($command->withdrawalId);
 
             if (! $withdrawal) {
                 throw new DomainException('Withdrawal not found.');
@@ -39,36 +32,53 @@ final class UpdateWithdrawalConfirmationsHandler
                 return;
             }
 
-            if (in_array($withdrawal->status(), ['confirmed', 'settled', 'debited'], true)) {
+            // Reorg detection if we already had a confirmed snapshot and current block hash differs.
+            if (
+                $withdrawal->confirmedBlockNumber() !== null &&
+                $withdrawal->confirmedBlockHash() !== null &&
+                $command->blockNumber !== null &&
+                $command->blockHash !== null &&
+                $withdrawal->confirmedBlockNumber() === $command->blockNumber &&
+                $withdrawal->confirmedBlockHash() !== $command->blockHash
+            ) {
+                $withdrawal->markReorged(
+                    reason: 'canonical_block_hash_mismatch',
+                    reorgBlockNumber: $withdrawal->confirmedBlockNumber()
+                );
+                $this->withdrawals->save($withdrawal);
+
+                $this->handleReorg->handle(new HandleWithdrawalReorgCommand(
+                    withdrawalId: $withdrawal->id()->value(),
+                    reason: 'canonical_block_hash_mismatch',
+                    metadata: $command->metadata
+                ));
+
                 return;
             }
 
-            $withdrawal->updateConfirmations(
-                        $command->blockHash,
-                        $command->blockNumber,
-                        $command->confirmations,
-                        null,
-                        $command->metadata );
+            if ($withdrawal->status() === 'confirmed') {
+                return;
+            }
 
-            $this->withdrawalsRepo->save($withdrawal);
+            if (! in_array($withdrawal->status(), ['broadcasted', 'settled'], true)) {
+                return;
+            }
 
-            $requirement = $this->requirements->resolve(
+            $required = $this->requirements->resolve(
                 $command->currencyNetworkId,
                 $withdrawal->amount()->value()
             );
 
-            if (! $command->finalized && $command->confirmations < $requirement) {
+            if (! $command->finalized && $command->confirmations < $required) {
                 return;
             }
-            $this->confirmWithdrawalHandler->handle(
-                new ConfirmWithdrawalCommand($withdrawal->id()->value())
+
+            $withdrawal->markConfirmed(
+                confirmations: $command->confirmations,
+                blockNumber: $command->blockNumber,
+                blockHash: $command->blockHash
             );
-//            if ($this->canBeDebitedPolicy->canBeDebited($withdrawal, $requirement)) {
-//                $this->confirmWithdrawalHandler->handle(
-//                    new ConfirmWithdrawalCommand($withdrawal->id()->value())
-//                );
-//            }
-            //$withdrawal->markConfirmed();
+            $this->withdrawals->save($withdrawal);
         });
     }
 }

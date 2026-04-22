@@ -15,12 +15,10 @@ final class WithdrawalStatus
     public const SETTLED = 'settled';
     public const CONFIRMED = 'confirmed';
     public const CANCELLED = 'cancelled';
-    public const DEBITED = 'debited';
-    public const REORGED = 'reordered';
-    public const REVERSED = 'reversed';
-    public const REVERSAL_FAILED = 'reversal_failed';
     public const FAILED = 'failed';
     public const RELEASED = 'released';
+    public const REORGED = 'reorged';
+    public const REVERSED = 'reversed';
     public const MANUAL_REVIEW = 'manual_review';
 
     public function __construct(private readonly string $value)
@@ -47,6 +45,8 @@ final class WithdrawalStatus
             self::CANCELLED,
             self::FAILED,
             self::RELEASED,
+            self::REORGED,
+            self::REVERSED,
             self::MANUAL_REVIEW,
         ];
     }

@@ -47,4 +47,5 @@ final class EloquentWithdrawalAttemptRepository implements WithdrawalAttemptRepo
 
         return $model ? $this->mapper->toDomain($model) : null;
     }
+
 }

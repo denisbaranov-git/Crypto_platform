@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Infrastructure\Blockchain\Jobs;
 
 use App\Application\Deposit\Commands\RegisterDetectedDepositCommand;
@@ -9,11 +11,12 @@ use App\Application\Deposit\Handlers\UpdateDepositConfirmationsHandler;
 use App\Domain\Deposit\Services\CurrencyNetworkQueryService;
 use App\Infrastructure\Blockchain\BlockchainClientFactory;
 use App\Infrastructure\Blockchain\ReorgDetector;
-use App\Infrastructure\Persistence\Eloquent\Repositories\NetworkScannerCursorRepository;
-use App\Models\CurrencyNetwork;
-use App\Models\Network;
-use App\Models\WalletAddress;
-use App\Models\Currency;
+use App\Infrastructure\Blockchain\Repositories\NetworkScannerCursorRepository;
+
+use App\Infrastructure\Persistence\Eloquent\Models\EloquentCurrency;
+use App\Infrastructure\Persistence\Eloquent\Models\EloquentCurrencyNetwork;
+use App\Infrastructure\Persistence\Eloquent\Models\EloquentNetwork;
+use App\Infrastructure\Persistence\Eloquent\Models\EloquentWalletAddress;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 
@@ -36,7 +39,7 @@ final class ScanNetworkBlocksJob implements ShouldQueue
         RegisterDetectedDepositHandler $registerHandler,
         UpdateDepositConfirmationsHandler $updateHandler,
     ): void {
-        $network = Network::query()->findOrFail($this->networkId);
+        $network = EloquentNetwork::query()->findOrFail($this->networkId);
         $cursor = $cursors->get($this->networkId);
 
         $networkConfig = config("deposit.scanner.networks.{$network->code}", []);
@@ -75,23 +78,21 @@ final class ScanNetworkBlocksJob implements ShouldQueue
                 $walletContext = $this->resolveWalletContext($network->id, $event->toAddress);
 
                 if (! $walletContext) {
-                    // Адрес не принадлежит платформе.
                     continue;
                 }
 
                 $currencyCode = $event->metadata['currency_code'] ?? $network->native_currency_code;
-                $currency = Currency::query()->where('code', $currencyCode)->first();
+                $currency = EloquentCurrency::query()->where('code', $currencyCode)->first();
 
                 if (! $currency) {
-                    // Валюта не поддерживается.
-                    continue;
+                    continue; // Валюта не поддерживается.
                 }
 
-                $currencyNetwork = CurrencyNetwork::query()
+                $currencyNetwork = EloquentCurrencyNetwork::query()
                     ->where('network_id', $network->id)
                     ->where('currency_id', $currency->id)
                     ->where(function ($q) use ($event) {
-                        if (($event->assetType === 'native')) {
+                        if ($event->assetType === 'native') {
                             $q->whereNull('contract_address');
                         } else {
                             $q->where('contract_address', strtolower((string) $event->contractAddress));
@@ -141,7 +142,6 @@ final class ScanNetworkBlocksJob implements ShouldQueue
             $cursors->advance($network->id, $blockNumber, $client->blockHash($blockNumber));
         }
     }
-
     /**
      * Простая address lookup логика.
      * В продакшне это можно вынести в отдельный query service,
@@ -149,7 +149,7 @@ final class ScanNetworkBlocksJob implements ShouldQueue
      */
     private function resolveWalletContext(int $networkId, string $address): ?array
     {
-        $walletAddress = WalletAddress::query()
+        $walletAddress = EloquentWalletAddress::query()
             ->where('network_id', $networkId)
             ->where('address', $address)
             ->where('is_active', true)

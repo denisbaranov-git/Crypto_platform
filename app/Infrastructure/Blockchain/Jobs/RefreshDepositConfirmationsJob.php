@@ -6,7 +6,7 @@ use App\Application\Deposit\Commands\UpdateDepositConfirmationsCommand;
 use App\Application\Deposit\Handlers\UpdateDepositConfirmationsHandler;
 use App\Domain\Deposit\Repositories\DepositRepository;
 use App\Infrastructure\Blockchain\BlockchainClientFactory;
-use App\Infrastructure\Persistence\Eloquent\Repositories\NetworkScannerCursorRepository;
+use App\Infrastructure\Blockchain\Repositories\NetworkScannerCursorRepository;
 use App\Models\Network;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;

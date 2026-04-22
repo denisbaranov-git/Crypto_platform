@@ -2,9 +2,9 @@
 
 namespace App\Services\Wallet;
 
-use App\Models\SystemWallet;
-use Illuminate\Support\Facades\Crypt;
+use App\Infrastructure\Persistence\Eloquent\Models\EloquentSystemWallet;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\Crypt;
 
 class SystemWalletService
 {
@@ -13,7 +13,7 @@ class SystemWalletService
     {
         $walletData = $this->addressGenerator->generate($network);
 
-        SystemWallet::create([
+        EloquentSystemWallet::create([
             'network' => $network_id,
             'type' => $type,
             'address' => $walletData['address'],

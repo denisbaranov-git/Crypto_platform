@@ -1,10 +1,10 @@
 <?php
 
-namespace App\Models;
+namespace App\Infrastructure\Persistence\Eloquent\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class SystemWallet extends Model
+class EloquentSystemWallet extends Model
 {
-    //
+    protected $table = 'system_wallets';
 }

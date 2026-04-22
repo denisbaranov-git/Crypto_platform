@@ -10,6 +10,15 @@ use App\Infrastructure\Ledger\Services\EloquentLedgerService;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 
+/**
+ * Cancel
+ *
+ * If withdrawal is still reserved or broadcast_pending:
+ *
+ * call releaseFunds()
+ * set withdrawal released
+ * set withdrawal cancelled
+ */
 final class CancelWithdrawalHandler
 {
     public function __construct(
@@ -30,7 +39,10 @@ final class CancelWithdrawalHandler
 
             if ($withdrawal->ledgerHoldId() !== null) {
                 $releaseOperationId = 'withdrawal:' . $withdrawal->id()->value() . ':release';
-
+                /**
+                 * Важно: после reserveFunds() и commit нужно стартовать broadcast job.
+                 * У тебя это можно делать в контроллере сразу после handler returns, либо через DB::afterCommit().
+                */
                 $this->ledger->releaseFunds(
                     holdId: $withdrawal->ledgerHoldId(),
                     operationId: $releaseOperationId,

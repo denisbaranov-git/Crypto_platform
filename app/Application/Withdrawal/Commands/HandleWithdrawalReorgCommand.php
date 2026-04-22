@@ -1,8 +1,14 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Application\Withdrawal\Commands;
 
-class HandleWithdrawalReorgCommand
+final readonly class HandleWithdrawalReorgCommand
 {
-
+    public function __construct(
+        public int $withdrawalId,
+        public string $reason,
+        public array $metadata = [],
+    ) {}
 }

@@ -1,6 +1,6 @@
 <?php
 
-namespace App\Infrastructure\Blockchain\Scanner\Repositories;
+namespace App\Infrastructure\Blockchain\Repositories;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentNetworkScannerCursor;
 
 final class NetworkScannerCursorRepository

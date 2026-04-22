@@ -4,24 +4,18 @@ declare(strict_types=1);
 
 namespace App\Domain\Withdrawal\Entities;
 
-use App\Domain\Deposit\ValueObjects\ConfirmationRequirement;
-use App\Domain\Shared\RecordsDomainEvents;
 use App\Domain\Shared\ValueObjects\Amount;
-use App\Domain\Shared\ValueObjects\BlockNumber;
-use App\Domain\Shared\ValueObjects\ExternalKey;
 use App\Domain\Shared\ValueObjects\TxId;
 use App\Domain\Withdrawal\Events\WithdrawalBroadcasted;
 use App\Domain\Withdrawal\Events\WithdrawalCancelled;
 use App\Domain\Withdrawal\Events\WithdrawalConfirmed;
-use App\Domain\Withdrawal\Events\WithdrawalDebited;
 use App\Domain\Withdrawal\Events\WithdrawalFailed;
 use App\Domain\Withdrawal\Events\WithdrawalReleased;
 use App\Domain\Withdrawal\Events\WithdrawalReorged;
+use App\Domain\Withdrawal\Events\WithdrawalReversed;
 use App\Domain\Withdrawal\Events\WithdrawalRequested;
 use App\Domain\Withdrawal\Events\WithdrawalReserved;
 use App\Domain\Withdrawal\Events\WithdrawalSettled;
-use App\Domain\Withdrawal\Exceptions\InvalidWithdrawalTransition;
-use App\Domain\Withdrawal\Exceptions\WithdrawalAlreadyDebited;
 use App\Domain\Withdrawal\ValueObjects\WithdrawalAddress;
 use App\Domain\Withdrawal\ValueObjects\WithdrawalFeeSnapshot;
 use App\Domain\Withdrawal\ValueObjects\WithdrawalId;
@@ -31,154 +25,135 @@ use DomainException;
 
 /**
  * CHANGED:
- * - withdrawal is now the process aggregate root;
- * - domain events are recorded locally;
- * - no outbox bridge is required between internal steps.
+ * - withdrawal is a process aggregate, not a ledger fact table;
+ * - hydrate() is used by the mapper;
+ * - events are recorded locally;
+ * - reorg/reversal lifecycle is explicit.
  */
 final class Withdrawal
 {
-    use RecordsDomainEvents;
+    /** @var array<int, object> */
+    private array $recordedEvents = [];
 
-    private function __construct(
-        private ?WithdrawalId          $id,
-        private int                    $userId,
-        private int                    $networkId,
-        private int                    $currencyNetworkId,
-        private WithdrawalAddress      $destinationAddress,
-        private ?WithdrawalTag         $destinationTag,
-        private Amount                 $amount,
-        private ExternalKey            $externalKey,
-        private string                 $feeAmount,
-        private ?string                $networkFeeEstimatedAmount,
-        private ?string                $networkFeeActualAmount,
-        private string                 $totalDebitAmount,
-        private ?int                   $feeRuleId = null,
+    public function __construct(
+        private ?WithdrawalId $id,
+        private int $userId,
+        private int $networkId,
+        private int $currencyNetworkId,
+        private WithdrawalAddress $destinationAddress,
+        private ?WithdrawalTag $destinationTag,
+        private Amount $amount,
+        private string $feeAmount,
+        private ?string $networkFeeEstimatedAmount,
+        private ?string $networkFeeActualAmount,
+        private string $totalDebitAmount,
+        private ?int $feeRuleId = null,
         private ?WithdrawalFeeSnapshot $feeSnapshot = null,
-        private ?int                   $ledgerHoldId = null,
-        private ?string                $reserveOperationId = null,
-        private ?string                $consumeOperationId = null,
-        private ?string                $releaseOperationId = null,
-        private ?int                   $systemWalletId = null,
-        private ?TxId                  $txid = null,
-
-        //denis this must throw out from Withdrawal entity
-        private ?string                $blockHash = null,//denis
-        private ?BlockNumber           $blockNumber = null,//denis
-        private int                    $broadcastAttempts = 0,
-        private int                    $confirmations = 0,//denis
-        private string                 $status = WithdrawalStatus::REQUESTED,
-        private ?\DateTimeImmutable    $requestedAt = null,
-        private ?\DateTimeImmutable    $reservedAt = null,
-        private ?\DateTimeImmutable    $broadcastedAt = null,
-        private ?\DateTimeImmutable    $settledAt = null,
-        private ?\DateTimeImmutable $confirmedAt = null,
-        private ?\DateTimeImmutable $debitedAt = null,
-        private ?\DateTimeImmutable $finalizedAt = null,//denis
-        private ?\DateTimeImmutable $cancelledAt = null,
-        private ?\DateTimeImmutable $failedAt = null,
-        private ?\DateTimeImmutable $releasedAt = null,
+        private ?int $ledgerHoldId = null,
+        private ?string $reserveOperationId = null,
+        private ?string $consumeOperationId = null,
+        private ?string $releaseOperationId = null,
+        private ?string $reversalOperationId = null,
+        private ?int $systemWalletId = null,
+        private ?TxId $txid = null,
+        private int $broadcastAttempts = 0,
+        private string $status = WithdrawalStatus::REQUESTED,
+        private ?string $requestedAt = null,
+        private ?string $reservedAt = null,
+        private ?string $broadcastedAt = null,
+        private ?string $settledAt = null,
+        private ?string $confirmedAt = null,
+        private ?string $cancelledAt = null,
+        private ?string $failedAt = null,
+        private ?string $releasedAt = null,
+        private ?string $reorgedAt = null,
+        private ?string $reversedAt = null,
         private ?string $failureReason = null,
         private ?string $cancellationReason = null,
         private ?string $rejectionReason = null,
+        private ?string $reorgReason = null,
+        private ?string $reversalReason = null,
         private ?string $lastError = null,
-        //ledger linkage
-        private ?string $debitedOperationId,
-        private ?string $reversalOperationId,
-
+        private ?int $confirmedBlockNumber = null,
+        private ?string $confirmedBlockHash = null,
+        private ?int $confirmedConfirmations = null,
+        private ?int $reorgBlockNumber = null,
+        private int $reversalAttempts = 0,
+        private ?string $reversalLastError = null,
+        private ?string $reversalFailedAt = null,
         private string $idempotencyKey = '',
         private int $version = 0,
         private array $metadata = [],
-
-        //reorg lifecycle
-        private ?\DateTimeImmutable $reorgedAt = null,
-        private ?\DateTimeImmutable $reversedAt = null,
-        private ?string $reorgReason = null,
-        private ?string $reversalReason = null,
-        private ?int $reorgBlockNumber = null,
-        //retry/incident tracking for reversal
-        private int $reversalAttempts = 0,
-        private ?string $reversalLastError = null,
-        private ?\DateTimeImmutable $reversalFailedAt = null,
     ) {
         $this->status = (new WithdrawalStatus($status))->value();
         $this->assertInvariant();
     }
 
-    public static function request(
-        int                    $userId,
-        int                    $networkId,
-        int                    $currencyNetworkId,
-        WithdrawalAddress      $destinationAddress,
-        ?WithdrawalTag         $destinationTag,
-        Amount                 $amount,
-        string                 $feeAmount,
-        ?string                $networkFeeEstimatedAmount,
-        string                 $totalDebitAmount,
-        ?int                   $feeRuleId,
-        ?WithdrawalFeeSnapshot $feeSnapshot,
-        ExternalKey            $externalKey,
-        string                 $idempotencyKey,
-        ?string                $blockHash = null,
-        ?BlockNumber           $blockNumber = null,
-        int                    $confirmations = 0,
-        array                  $metadata = [],
-    ): self {
-        $self = new self(
-            id: null,
-            userId: $userId,
-            networkId: $networkId,
-            currencyNetworkId: $currencyNetworkId,
-            destinationAddress: $destinationAddress,
-            destinationTag: $destinationTag,
-            amount: $amount,
-            externalKey: $externalKey,
-            feeAmount: $feeAmount,
-            networkFeeEstimatedAmount: $networkFeeEstimatedAmount,
-            networkFeeActualAmount: null,
-            totalDebitAmount: $totalDebitAmount,
-            ExternalKey: $externalKey,
-            feeRuleId: $feeRuleId,
-            feeSnapshot: $feeSnapshot,
-            blockHash: $blockHash,
-            blockNumber: $blockNumber,
-            confirmations: $confirmations,
-            status: WithdrawalStatus::REQUESTED,
-            requestedAt: new \DateTimeImmutable(),
-            idempotencyKey: $idempotencyKey,
-            metadata: $metadata,
-        );
-
-        $self->recordDomainEvent(new WithdrawalRequested(
-            withdrawalId: null,
-            userId: $userId,
-            networkId: $networkId,
-            currencyNetworkId: $currencyNetworkId,
-            idempotencyKey: $idempotencyKey,
-            amount: $amount->value(),
-        ));
-
-        return $self;
-    }
-
-
-//    public function withId(int $id): self
-//    {
-//        $clone = clone $this;
-//        $clone->id = new WithdrawalId($id);
-//
-//        return $clone;
-//    }
-    public function assignId(WithdrawalId $id): void
+    public static function hydrate(array $data): self
     {
-        if ($this->id !== null) {
-            return;
-        }
-
-        $this->id = $id;
+        return new self(
+            id: isset($data['id']) ? new WithdrawalId((int) $data['id']) : null,
+            userId: (int) ($data['user_id'] ?? 0),
+            networkId: (int) ($data['network_id'] ?? 0),
+            currencyNetworkId: (int) ($data['currency_network_id'] ?? 0),
+            destinationAddress: new WithdrawalAddress((string) ($data['destination_address'] ?? '')),
+            destinationTag: array_key_exists('destination_tag', $data) && $data['destination_tag'] !== null
+                ? new WithdrawalTag((string) $data['destination_tag'])
+                : null,
+            amount: new Amount((string) ($data['amount'] ?? '0')),
+            feeAmount: (string) ($data['fee_amount'] ?? '0'),
+            networkFeeEstimatedAmount: $data['network_fee_estimated_amount'] ?? null,
+            networkFeeActualAmount: $data['network_fee_actual_amount'] ?? null,
+            totalDebitAmount: (string) ($data['total_debit_amount'] ?? '0'),
+            feeRuleId: isset($data['fee_rule_id']) ? (int) $data['fee_rule_id'] : null,
+            feeSnapshot: isset($data['fee_snapshot']) && is_array($data['fee_snapshot']) && $data['fee_snapshot'] !== []
+                ? new WithdrawalFeeSnapshot(
+                    feeRuleId: (string) ($data['fee_snapshot']['fee_rule_id'] ?? ''),
+                    feeType: (string) ($data['fee_snapshot']['fee_type'] ?? 'fixed'),
+                    fee: (string) ($data['fee_snapshot']['fee'] ?? '0'),
+                    minAmount: $data['fee_snapshot']['min_amount'] ?? null,
+                    maxAmount: $data['fee_snapshot']['max_amount'] ?? null,
+                    priority: isset($data['fee_snapshot']['priority']) ? (int) $data['fee_snapshot']['priority'] : null,
+                    metadata: (array) ($data['fee_snapshot']['metadata'] ?? []),
+                )
+                : null,
+            ledgerHoldId: isset($data['ledger_hold_id']) ? (int) $data['ledger_hold_id'] : null,
+            reserveOperationId: $data['reserve_operation_id'] ?? null,
+            consumeOperationId: $data['consume_operation_id'] ?? null,
+            releaseOperationId: $data['release_operation_id'] ?? null,
+            reversalOperationId: $data['reversal_operation_id'] ?? null,
+            systemWalletId: isset($data['system_wallet_id']) ? (int) $data['system_wallet_id'] : null,
+            txid: ! empty($data['txid']) ? new TxId((string) $data['txid']) : null,
+            broadcastAttempts: (int) ($data['broadcast_attempts'] ?? 0),
+            status: (string) ($data['status'] ?? WithdrawalStatus::REQUESTED),
+            requestedAt: $data['requested_at'] ?? null,
+            reservedAt: $data['reserved_at'] ?? null,
+            broadcastedAt: $data['broadcasted_at'] ?? null,
+            settledAt: $data['settled_at'] ?? null,
+            confirmedAt: $data['confirmed_at'] ?? null,
+            cancelledAt: $data['cancelled_at'] ?? null,
+            failedAt: $data['failed_at'] ?? null,
+            releasedAt: $data['released_at'] ?? null,
+            reorgedAt: $data['reorged_at'] ?? null,
+            reversedAt: $data['reversed_at'] ?? null,
+            failureReason: $data['failure_reason'] ?? null,
+            cancellationReason: $data['cancellation_reason'] ?? null,
+            rejectionReason: $data['rejection_reason'] ?? null,
+            reorgReason: $data['reorg_reason'] ?? null,
+            reversalReason: $data['reversal_reason'] ?? null,
+            lastError: $data['last_error'] ?? null,
+            confirmedBlockNumber: isset($data['confirmed_block_number']) ? (int) $data['confirmed_block_number'] : null,
+            confirmedBlockHash: $data['confirmed_block_hash'] ?? null,
+            confirmedConfirmations: isset($data['confirmed_confirmations']) ? (int) $data['confirmed_confirmations'] : null,
+            reorgBlockNumber: isset($data['reorg_block_number']) ? (int) $data['reorg_block_number'] : null,
+            reversalAttempts: (int) ($data['reversal_attempts'] ?? 0),
+            reversalLastError: $data['reversal_last_error'] ?? null,
+            reversalFailedAt: $data['reversal_failed_at'] ?? null,
+            idempotencyKey: (string) ($data['idempotency_key'] ?? ''),
+            version: (int) ($data['version'] ?? 0),
+            metadata: (array) ($data['metadata'] ?? []),
+        );
     }
-    public static function hydrate(  //denis
-        need to do-----> like Deposit
-
 
     public function id(): ?WithdrawalId { return $this->id; }
     public function userId(): int { return $this->userId; }
@@ -197,6 +172,7 @@ final class Withdrawal
     public function reserveOperationId(): ?string { return $this->reserveOperationId; }
     public function consumeOperationId(): ?string { return $this->consumeOperationId; }
     public function releaseOperationId(): ?string { return $this->releaseOperationId; }
+    public function reversalOperationId(): ?string { return $this->reversalOperationId; }
     public function systemWalletId(): ?int { return $this->systemWalletId; }
     public function txid(): ?TxId { return $this->txid; }
     public function broadcastAttempts(): int { return $this->broadcastAttempts; }
@@ -209,46 +185,68 @@ final class Withdrawal
     public function cancelledAt(): ?string { return $this->cancelledAt; }
     public function failedAt(): ?string { return $this->failedAt; }
     public function releasedAt(): ?string { return $this->releasedAt; }
+    public function reorgedAt(): ?string { return $this->reorgedAt; }
+    public function reversedAt(): ?string { return $this->reversedAt; }
     public function failureReason(): ?string { return $this->failureReason; }
     public function cancellationReason(): ?string { return $this->cancellationReason; }
     public function rejectionReason(): ?string { return $this->rejectionReason; }
+    public function reorgReason(): ?string { return $this->reorgReason; }
+    public function reversalReason(): ?string { return $this->reversalReason; }
     public function lastError(): ?string { return $this->lastError; }
+    public function confirmedBlockNumber(): ?int { return $this->confirmedBlockNumber; }
+    public function confirmedBlockHash(): ?string { return $this->confirmedBlockHash; }
+    public function confirmedConfirmations(): ?int { return $this->confirmedConfirmations; }
+    public function reorgBlockNumber(): ?int { return $this->reorgBlockNumber; }
+    public function reversalAttempts(): int { return $this->reversalAttempts; }
+    public function reversalLastError(): ?string { return $this->reversalLastError; }
+    public function reversalFailedAt(): ?string { return $this->reversalFailedAt; }
     public function idempotencyKey(): string { return $this->idempotencyKey; }
     public function version(): int { return $this->version; }
     public function metadata(): array { return $this->metadata; }
 
-    /**
-     * updateConfirmations:
-     * - подтверждения можно обновлять и после reorg, когда депозит был найден заново;
-     * - confirmations не уменьшаются;
-     * - metadata
-     */
-    public function updateConfirmations(
-        ?string $blockHash = null,
-        ?BlockNumber $blockNumber = null,
-        ?int $confirmations = null,
-        ?\DateTimeImmutable $finalizedAt = null,
-        ?array $metadata = null
-    ): void {
-        if ($blockHash !== null) {
-            $this->blockHash = $blockHash;
-        }
+    public static function request(
+        int $userId,
+        int $networkId,
+        int $currencyNetworkId,
+        WithdrawalAddress $destinationAddress,
+        ?WithdrawalTag $destinationTag,
+        Amount $amount,
+        string $feeAmount,
+        ?string $networkFeeEstimatedAmount,
+        string $totalDebitAmount,
+        ?int $feeRuleId,
+        ?WithdrawalFeeSnapshot $feeSnapshot,
+        string $idempotencyKey,
+        array $metadata = []
+    ): self {
+        $self = new self(
+            id: null,
+            userId: $userId,
+            networkId: $networkId,
+            currencyNetworkId: $currencyNetworkId,
+            destinationAddress: $destinationAddress,
+            destinationTag: $destinationTag,
+            amount: $amount,
+            feeAmount: $feeAmount,
+            networkFeeEstimatedAmount: $networkFeeEstimatedAmount,
+            networkFeeActualAmount: null,
+            totalDebitAmount: $totalDebitAmount,
+            feeRuleId: $feeRuleId,
+            feeSnapshot: $feeSnapshot,
+            idempotencyKey: $idempotencyKey,
+            metadata: $metadata
+        );
 
-        if ($blockNumber !== null) {
-            $this->blockNumber = $blockNumber;
-        }
+        $self->recordThat(new WithdrawalRequested(
+            withdrawalId: null,
+            userId: $userId,
+            networkId: $networkId,
+            currencyNetworkId: $currencyNetworkId,
+            idempotencyKey: $idempotencyKey,
+            amount: $amount->value(),
+        ));
 
-        if ($confirmations !== null && $confirmations > $this->confirmations) {
-            $this->confirmations = $confirmations;
-        }
-
-        if ($finalizedAt !== null) {
-            $this->finalizedAt = $finalizedAt;
-        }
-
-        if ($metadata !== null) {
-            $this->metadata = array_replace($this->metadata, $metadata);
-        }
+        return $self;
     }
 
     public function markReserved(int $holdId, string $reserveOperationId): void
@@ -258,10 +256,10 @@ final class Withdrawal
         $this->status = WithdrawalStatus::RESERVED;
         $this->ledgerHoldId = $holdId;
         $this->reserveOperationId = $reserveOperationId;
-        $this->reservedAt = new \DateTimeImmutable();//now()->toDateTimeString();
+        $this->reservedAt = now()->toDateTimeString();
         $this->version++;
 
-        $this->recordDomainEvent(new WithdrawalReserved(
+        $this->recordThat(new WithdrawalReserved(
             withdrawalId: $this->id?->value() ?? 0,
             ledgerHoldId: $holdId,
             reserveOperationId: $reserveOperationId,
@@ -288,10 +286,10 @@ final class Withdrawal
         $this->systemWalletId = $systemWalletId;
         $this->networkFeeActualAmount = $networkFeeActualAmount;
         $this->broadcastAttempts++;
-        $this->broadcastedAt = new \DateTimeImmutable();//now()->toDateTimeString();
+        $this->broadcastedAt = now()->toDateTimeString();
         $this->version++;
 
-        $this->recordDomainEvent(new WithdrawalBroadcasted(
+        $this->recordThat(new WithdrawalBroadcasted(
             withdrawalId: $this->id?->value() ?? 0,
             txid: $txid->value(),
             systemWalletId: $systemWalletId,
@@ -302,17 +300,14 @@ final class Withdrawal
 
     public function markSettled(string $consumeOperationId): void
     {
-        $this->assertCanTransition([
-            WithdrawalStatus::BROADCASTED,
-            WithdrawalStatus::SETTLED,
-        ]);
+        $this->assertCanTransition([WithdrawalStatus::BROADCASTED, WithdrawalStatus::SETTLED]);
 
         $this->status = WithdrawalStatus::SETTLED;
         $this->consumeOperationId = $consumeOperationId;
-        $this->settledAt = new \DateTimeImmutable();//now()->toDateTimeString();
+        $this->settledAt = now()->toDateTimeString();
         $this->version++;
 
-        $this->recordDomainEvent(new WithdrawalSettled(
+        $this->recordThat(new WithdrawalSettled(
             withdrawalId: $this->id?->value() ?? 0,
             consumeOperationId: $consumeOperationId,
         ));
@@ -320,121 +315,29 @@ final class Withdrawal
         $this->assertInvariant();
     }
 
-    public function markConfirmed(): void
+    public function markConfirmed(int $confirmations, ?int $blockNumber = null, ?string $blockHash = null): void
     {
         $this->assertCanTransition([
             WithdrawalStatus::SETTLED,
-            //WithdrawalStatus::CONFIRMED,
+            WithdrawalStatus::CONFIRMED,
         ]);
 
-        if ($this->confirmations < 1 && $this->finalizedAt === null) {
-            throw new InvalidWithdrawalTransition("Invalid Withdrawal transition to status CONFIRMED, confirmations = {$this->confirmations}, finalizedAt= {$this->finalizedAt}");
-        }
-        if ($this->status === WithdrawalStatus::CONFIRMED) {
-            return;
-        }
         $this->status = WithdrawalStatus::CONFIRMED;
-        $this->confirmedAt =  new \DateTimeImmutable();//now()->toDateTimeString();
+        $this->confirmedAt = now()->toDateTimeString();
+        $this->confirmedConfirmations = $confirmations;
+        $this->confirmedBlockNumber = $blockNumber;
+        $this->confirmedBlockHash = $blockHash;
         $this->version++;
 
-        $this->recordDomainEvent(new WithdrawalConfirmed(
+        $this->recordThat(new WithdrawalConfirmed(
             withdrawalId: $this->id?->value() ?? 0,
-            networkId: $this->networkId,
-            externalKey: $this->externalKey->value(),
             txid: $this->txid?->value() ?? '',
+            confirmations: $confirmations,
+            blockNumber: $blockNumber,
+            blockHash: $blockHash,
         ));
 
         $this->assertInvariant();
-    }
-
-    public function markDebited(string $operationId): void
-    {
-        if ($this->status === WithdrawalStatus::DEBITED) {
-            throw new WithdrawalAlreadyDebited();
-        }
-
-        if ($this->status !== WithdrawalStatus::CONFIRMED) {
-            throw new InvalidWithdrawalTransition("Invalid transition Withdrawal must be CONFIRMED");
-        }
-
-        $this->status = WithdrawalStatus::DEBITED;
-        $this->debitedAt = new \DateTimeImmutable();
-
-        // WithdrawalDebited + фиксируем ещё и связь с ledger operation.
-        $this->debitedOperationId = $operationId;
-
-        $this->recordDomainEvent(new WithdrawalDebited(
-            WithdrawalId: $this->id?->value(),
-            networkId: $this->networkId,
-            externalKey: $this->externalKey->value(),
-            operationId: $operationId,
-        ));
-    }
-    public function markFinalized(): void
-    {
-        $this->finalizedAt = new \DateTimeImmutable();
-    }
-
-     /**
-     * - reorg фиксируется как отдельный lifecycle state;
-     * - сохраняем причину reorg;
-     * - сохраняем rewind target;
-     * - очищаем текущие on-chain признаки;
-     * - НЕ удаляем creditedAt/confirmedAt — это история;
-     * - reorged withdrawal не означает reversed withdrawal.
-     *
-     * - если withdrawal уже credited, этот метод только помечает его как reorged;
-     * - reversal позже делает LedgerService.
-     */
-    public function markReorged(
-        ?BlockNumber $rewindToBlock = null,
-        ?string $reason = 'blockchain_reorg'
-    ): void {
-        $wasDebited = $this->status === WithdrawalStatus::DEBITED;
-        $oldBlock = $this->blockNumber?->value();
-
-        $this->status = WithdrawalStatus::REORGED;
-        $this->reorgedAt = new \DateTimeImmutable();
-        $this->reorgReason = $reason;
-        $this->reorgBlockNumber = $rewindToBlock?->value();
-        // СБРОС текущих on-chain индикаторов, потому что chain state был откатан.
-        $this->blockHash = null;
-        $this->blockNumber = null;
-        $this->confirmations = 0;
-        $this->finalizedAt = null;
-        // debitedAt НЕ трогаем: это факт, что ledger когда-то дебитовал.
-        // Его потом компенсирует reversal.
-        if ($wasDebited) {
-            $this->recordDomainEvent(new WithdrawalReorged(
-                WithdrawalId: $this->id?->value(),
-                networkId: $this->networkId,
-                externalKey: $this->externalKey->value(),
-                oldBlockNumber: $oldBlock,
-                newBlockNumber: $rewindToBlock?->value(),
-            ));
-        }
-    }
-
-    public function markReversed(string $operationId, ?string $reason = 'withdrawal_reversal'): void
-    {
-        if (! in_array($this->status, [WithdrawalStatus::REORGED, WithdrawalStatus::DEBITED], true)) {
-            throw new InvalidWithdrawalTransition("Withdrawal can be reversed if in REORGED or DEBITED");
-        }
-
-        $this->status = WithdrawalStatus::REVERSED;
-        $this->reversedAt = new \DateTimeImmutable();
-        $this->reversalOperationId = $operationId;
-        $this->reversalReason = $reason;
-    }
-
-    public function markReversalFailed(string $error): void
-    {
-        $this->reversalAttempts++;
-        $this->reversalLastError = $error;
-        $this->reversalFailedAt = new \DateTimeImmutable();
-
-        // Можно оставить статус Reorged и просто копить retry,
-        $this->status = WithdrawalStatus::REVERSAL_FAILED;
     }
 
     public function markCancelled(string $reason): void
@@ -447,10 +350,10 @@ final class Withdrawal
 
         $this->status = WithdrawalStatus::CANCELLED;
         $this->cancellationReason = $reason;
-        $this->cancelledAt = new \DateTimeImmutable();//now()->toDateTimeString();
+        $this->cancelledAt = now()->toDateTimeString();
         $this->version++;
 
-        $this->recordDomainEvent(new WithdrawalCancelled(
+        $this->recordThat(new WithdrawalCancelled(
             withdrawalId: $this->id?->value() ?? 0,
             reason: $reason,
         ));
@@ -460,17 +363,17 @@ final class Withdrawal
 
     public function markFailed(string $reason, ?string $lastError = null): void
     {
-        if (in_array($this->status, [WithdrawalStatus::SETTLED, WithdrawalStatus::CONFIRMED], true)) {
-            throw new DomainException('Settled withdrawal cannot be failed.');
+        if (in_array($this->status, [WithdrawalStatus::SETTLED, WithdrawalStatus::CONFIRMED, WithdrawalStatus::REVERSED], true)) {
+            throw new DomainException('Settled/confirmed/reversed withdrawal cannot be failed.');
         }
 
         $this->status = WithdrawalStatus::FAILED;
         $this->failureReason = $reason;
         $this->lastError = $lastError;
-        $this->failedAt = new \DateTimeImmutable();//now()->toDateTimeString();
+        $this->failedAt = now()->toDateTimeString();
         $this->version++;
 
-        $this->recordDomainEvent(new WithdrawalFailed(
+        $this->recordThat(new WithdrawalFailed(
             withdrawalId: $this->id?->value() ?? 0,
             reason: $reason,
             lastError: $lastError,
@@ -488,15 +391,69 @@ final class Withdrawal
 
         $this->status = WithdrawalStatus::RELEASED;
         $this->releaseOperationId = $releaseOperationId;
-        $this->releasedAt = new \DateTimeImmutable();//now()->toDateTimeString();
+        $this->releasedAt = now()->toDateTimeString();
         $this->version++;
 
-        $this->recordDomainEvent(new WithdrawalReleased(
+        $this->recordThat(new WithdrawalReleased(
             withdrawalId: $this->id?->value() ?? 0,
             releaseOperationId: $releaseOperationId,
         ));
 
         $this->assertInvariant();
+    }
+
+    public function markReorged(string $reason, ?int $reorgBlockNumber = null): void
+    {
+        $this->assertCanTransition([
+            WithdrawalStatus::BROADCASTED,
+            WithdrawalStatus::SETTLED,
+            WithdrawalStatus::CONFIRMED,
+        ]);
+
+        $this->status = WithdrawalStatus::REORGED;
+        $this->reorgReason = $reason;
+        $this->reorgBlockNumber = $reorgBlockNumber;
+        $this->reorgedAt = now()->toDateTimeString();
+        $this->version++;
+
+        $this->recordThat(new WithdrawalReorged(
+            withdrawalId: $this->id?->value() ?? 0,
+            reason: $reason,
+            reorgBlockNumber: $reorgBlockNumber,
+        ));
+
+        $this->assertInvariant();
+    }
+
+    public function markReversed(string $reason, string $reversalOperationId): void
+    {
+        $this->assertCanTransition([
+            WithdrawalStatus::REORGED,
+            WithdrawalStatus::SETTLED,
+            WithdrawalStatus::CONFIRMED,
+        ]);
+
+        $this->status = WithdrawalStatus::REVERSED;
+        $this->reversalReason = $reason;
+        $this->reversalOperationId = $reversalOperationId;
+        $this->reversedAt = now()->toDateTimeString();
+        $this->version++;
+
+        $this->recordThat(new WithdrawalReversed(
+            withdrawalId: $this->id?->value() ?? 0,
+            reason: $reason,
+            reversalOperationId: $reversalOperationId,
+        ));
+
+        $this->assertInvariant();
+    }
+
+    public function incrementReversalAttempts(string $error): void
+    {
+        $this->reversalAttempts++;
+        $this->reversalLastError = $error;
+        $this->reversalFailedAt = now()->toDateTimeString();
+        $this->version++;
     }
 
     public function recordLastError(string $lastError): void
@@ -505,73 +462,32 @@ final class Withdrawal
         $this->version++;
         $this->assertInvariant();
     }
-///////////////////////////////////////////////////////////////////////////////////////////
-///////////////////////////////////////////////////////////////////////////////////////////
-     /**
-     * business rule:
-     * - confirmed
-     * - enough confirmations or finality
-     * - not already debited
-     *
-     * - reorg/reversal states не допускаются в дебит;
-     * - terminal reversal states тоже запрещены.
-     */
-    public function canBeDebited(ConfirmationRequirement $requirement): bool
+
+    public function withId(int $id): self
     {
-        if (
-            in_array($this->status, [
-                WithdrawalStatus::DEBITED,
-                WithdrawalStatus::FAILED,
-                WithdrawalStatus::REVERSED,
-                WithdrawalStatus::REVERSAL_FAILED,
-                WithdrawalStatus::CANCELLED
-            ], true)
-        ) {
-            return false;
-        }
+        $clone = clone $this;
+        $clone->id = new WithdrawalId($id);
 
-        if ($requirement->isBlocks()) {
-            return $this->status === WithdrawalStatus::CONFIRMED
-                && $this->confirmations >= $requirement->requiredConfirmations;
-        }
-
-        if ($requirement->isFinality()) {
-            return $this->status === WithdrawalStatus::CONFIRMED
-                && $this->finalizedAt !== null;
-        }
-
-        return false;
+        return $clone;
     }
 
-    public function isOpen(): bool
+    public function pullDomainEvents(): array
     {
-        // reorged/reversed/reversal_failed — уже не open.
-        return in_array(
-            $this->status,
-            [WithdrawalStatus::REQUESTED, WithdrawalStatus::RESERVED,WithdrawalStatus::SETTLED, WithdrawalStatus::CONFIRMED],
-            true
-        );
+        $events = $this->recordedEvents;
+        $this->recordedEvents = [];
+
+        return $events;
     }
 
-    public function isDebited(): bool
+    private function recordThat(object $event): void
     {
-        return $this->status === WithdrawalStatus::DEBITED;
+        $this->recordedEvents[] = $event;
     }
 
-    /**
-     * Удобная проверка для recovery/reversal workflow.
-     */
-    public function needsReversal(): bool
-    {
-        return $this->status === WithdrawalStatus::REORGED
-            && $this->debitedOperationId !== null
-            && $this->reversalOperationId === null;
-    }
-////////////////////////////////////////////////////////////////////////////
     private function assertCanTransition(array $allowedStatuses): void
     {
         if (! in_array($this->status, $allowedStatuses, true)) {
-            throw new DomainException("Invalid withdrawal state transition from [$this->status].");
+            throw new DomainException("Invalid withdrawal transition from [$this->status].");
         }
     }
 

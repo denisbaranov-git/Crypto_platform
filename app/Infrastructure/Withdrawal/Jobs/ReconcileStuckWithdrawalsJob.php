@@ -15,8 +15,15 @@ use Illuminate\Foundation\Queue\Queueable;
  * CHANGED:
  * - recovery-only job;
  * - handles stale reserved / broadcasted / settled states;
- * - no outbox needed.
+ * - no outbox needed. //denis ???????
  */
+
+//ReconcileStuckWithdrawalsJob
+//
+//reserved too long and has`t txid  → dispatch BroadcastWithdrawalJob
+//broadcasted too long and has txid, but has`t consume → dispatch → dispatch ConsumeWithdrawalHoldJob
+//settled too long and not confirmed → dispatch ConfirmWithdrawalJob
+
 final class ReconcileStuckWithdrawalsJob implements ShouldQueue
 {
     use Queueable;
@@ -30,47 +37,37 @@ final class ReconcileStuckWithdrawalsJob implements ShouldQueue
 
     public function handle(): void
     {
-        $staleReserveMinutes = (int) config('withdrawal.recovery.stale_reserve_minutes', 10);
-        $staleBroadcastMinutes = (int) config('withdrawal.recovery.stale_broadcast_minutes', 10);
-        $staleSettlementMinutes = (int) config('withdrawal.recovery.stale_settlement_minutes', 10);
-
         $now = now();
 
-        $reserved = EloquentWithdrawal::query()
+        $reservedMinutes = (int) config('withdrawal.recovery.stale_reserved_minutes', 15);
+        $broadcastedMinutes = (int) config('withdrawal.recovery.stale_broadcasted_minutes', 15);
+        $settledMinutes = (int) config('withdrawal.recovery.stale_settled_minutes', 15);
+
+        EloquentWithdrawal::query()
             ->where('network_id', $this->networkId)
             ->where('status', 'reserved')
-            ->where('updated_at', '<=', $now->copy()->subMinutes($staleReserveMinutes))
+            ->where('updated_at', '<=', $now->copy()->subMinutes($reservedMinutes))
             ->orderBy('id')
             ->limit(100)
-            ->get();
+            ->get()
+            ->each(fn ($row) => dispatch(new BroadcastWithdrawalJob((int) $row->id)));
 
-        foreach ($reserved as $row) {
-            dispatch(new BroadcastWithdrawalJob((int) $row->id));
-        }
-
-        $broadcasted = EloquentWithdrawal::query()
+        EloquentWithdrawal::query()
             ->where('network_id', $this->networkId)
             ->where('status', 'broadcasted')
-            ->where('updated_at', '<=', $now->copy()->subMinutes($staleBroadcastMinutes))
+            ->where('updated_at', '<=', $now->copy()->subMinutes($broadcastedMinutes))
             ->orderBy('id')
             ->limit(100)
-            ->get();
+            ->get()
+            ->each(fn ($row) => dispatch(new ConsumeWithdrawalHoldJob((int) $row->id)));
 
-        foreach ($broadcasted as $row) {
-            dispatch(new ConsumeWithdrawalHoldJob((int) $row->id));
-        }
-
-        $settled = EloquentWithdrawal::query()
+        EloquentWithdrawal::query()
             ->where('network_id', $this->networkId)
             ->where('status', 'settled')
-            ->where('updated_at', '<=', $now->copy()->subMinutes($staleSettlementMinutes))
+            ->where('updated_at', '<=', $now->copy()->subMinutes($settledMinutes))
             ->orderBy('id')
             ->limit(100)
-            ->get();
-
-        foreach ($settled as $row) {
-            dispatch(new ConfirmWithdrawalJob((int) $this->networkId));
-            break;
-        }
+            ->get()
+            ->each(fn ($row) => dispatch(new ConfirmWithdrawalJob((int) $this->networkId)));
     }
 }

@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::table('accounts', function (Blueprint $table) {
+        Schema::create('accounts', function (Blueprint $table) {
             $table->id();
             // Универсальный owner: user / system / merchant / partner / future loan
             $table->string('owner_type', 50)->default('user');//owner_type: user|system|merchant|partner|treasury|suspense
