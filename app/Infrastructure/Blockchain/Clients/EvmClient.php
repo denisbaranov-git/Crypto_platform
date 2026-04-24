@@ -415,4 +415,5 @@ final class EvmClient implements BlockchainClient
 
         return preg_replace('/^0x/', '', $hex) ?? $hex;
     }
+
 }

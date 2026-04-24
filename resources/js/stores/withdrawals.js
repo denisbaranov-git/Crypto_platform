@@ -1,13 +1,30 @@
-import { computed, ref } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { cancelWithdrawal, createWithdrawal, fetchWithdrawal, fetchWithdrawals } from '@/api/withdrawals'
 
-function extractErrorMessage(error) {
-    return (
-        error?.response?.data?.message ||
-        error?.response?.data?.error ||
-        error?.message ||
-        'Something went wrong'
-    )
+const DRAFT_KEY_STORAGE = 'withdrawal:draft:idempotency_key'
+
+function generateKey() {
+    return window.crypto?.randomUUID?.() ?? `withdrawal-${Date.now()}-${Math.random().toString(16).slice(2)}`
+}
+
+function readStoredKey() {
+    try {
+        return sessionStorage.getItem(DRAFT_KEY_STORAGE)
+    } catch {
+        return null
+    }
+}
+
+function writeStoredKey(value) {
+    try {
+        if (value) {
+            sessionStorage.setItem(DRAFT_KEY_STORAGE, value)
+        } else {
+            sessionStorage.removeItem(DRAFT_KEY_STORAGE)
+        }
+    } catch {
+        // sessionStorage can be unavailable in some environments
+    }
 }
 
 export const useWithdrawalsStore = () => {
@@ -18,11 +35,44 @@ export const useWithdrawalsStore = () => {
     const error = ref(null)
     const lastUpdatedAt = ref(null)
 
-    const openWithdrawals = computed(() =>
-        withdrawals.value.filter((w) =>
-            ['requested', 'reserved', 'broadcast_pending', 'broadcasted', 'settled'].includes(w.status)
-        )
-    )
+    const draft = reactive({
+        idempotencyKey: readStoredKey(),
+        startedAt: null,
+        submittedAt: null,
+    })
+
+    const hasDraftKey = computed(() => Boolean(draft.idempotencyKey))
+
+    function ensureDraftKey() {
+        if (!draft.idempotencyKey) {
+            draft.idempotencyKey = generateKey()
+            draft.startedAt = new Date().toISOString()
+            draft.submittedAt = null
+            writeStoredKey(draft.idempotencyKey)
+        }
+
+        return draft.idempotencyKey
+    }
+
+    function startNewDraft() {
+        draft.idempotencyKey = generateKey()
+        draft.startedAt = new Date().toISOString()
+        draft.submittedAt = null
+        writeStoredKey(draft.idempotencyKey)
+
+        return draft.idempotencyKey
+    }
+
+    function clearDraft() {
+        draft.idempotencyKey = null
+        draft.startedAt = null
+        draft.submittedAt = null
+        writeStoredKey(null)
+    }
+
+    function markSubmitted() {
+        draft.submittedAt = new Date().toISOString()
+    }
 
     async function loadWithdrawals(params = {}) {
         loading.value = true
@@ -37,7 +87,7 @@ export const useWithdrawalsStore = () => {
             withdrawals.value = response.data.data ?? response.data ?? []
             lastUpdatedAt.value = new Date().toLocaleString()
         } catch (e) {
-            error.value = extractErrorMessage(e)
+            error.value = e?.response?.data?.message || e?.message || 'Something went wrong'
             throw e
         } finally {
             loading.value = false
@@ -53,7 +103,7 @@ export const useWithdrawalsStore = () => {
             currentWithdrawal.value = response.data
             return response.data
         } catch (e) {
-            error.value = extractErrorMessage(e)
+            error.value = e?.response?.data?.message || e?.message || 'Something went wrong'
             throw e
         } finally {
             loading.value = false
@@ -65,13 +115,20 @@ export const useWithdrawalsStore = () => {
         error.value = null
 
         try {
-            const response = await createWithdrawal(payload)
-            currentWithdrawal.value = response.data
-            // После создания сразу обновляем список.
+            const key = ensureDraftKey()
+
+            const response = await createWithdrawal(payload, key)
+            const created = response.data
+
+            markSubmitted()
+            clearDraft()
+
+            currentWithdrawal.value = created
             await loadWithdrawals({ per_page: 20 })
-            return response.data
+
+            return created
         } catch (e) {
-            error.value = extractErrorMessage(e)
+            error.value = e?.response?.data?.message || e?.message || 'Something went wrong'
             throw e
         } finally {
             submitting.value = false
@@ -87,7 +144,7 @@ export const useWithdrawalsStore = () => {
             await loadWithdrawals({ per_page: 20 })
             return response.data
         } catch (e) {
-            error.value = extractErrorMessage(e)
+            error.value = e?.response?.data?.message || e?.message || 'Something went wrong'
             throw e
         } finally {
             loading.value = false
@@ -96,12 +153,16 @@ export const useWithdrawalsStore = () => {
 
     return {
         withdrawals,
-        openWithdrawals,
         currentWithdrawal,
         loading,
         submitting,
         error,
         lastUpdatedAt,
+        draft,
+        hasDraftKey,
+        ensureDraftKey,
+        startNewDraft,
+        clearDraft,
         loadWithdrawals,
         loadWithdrawal,
         submitWithdrawal,

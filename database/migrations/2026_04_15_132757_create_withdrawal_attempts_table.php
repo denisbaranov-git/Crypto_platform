@@ -15,6 +15,7 @@ return new class extends Migration
             $table->id();
 
             $table->foreignId('withdrawal_id')->constrained('withdrawals')->cascadeOnDelete();
+            $table->foreignId('system_wallet_id')->nullable()->constrained('system_wallets')->nullOnDelete();
             $table->unsignedInteger('attempt_no');
 
             $table->string('broadcast_fingerprint', 160)->nullable();
@@ -22,6 +23,7 @@ return new class extends Migration
 
             $table->string('txid')->nullable();
             $table->string('broadcast_driver', 50)->nullable();
+            $table->unsignedBigInteger('nonce')->nullable();
 
             $table->string('raw_transaction_hash', 160)->nullable();
             $table->longText('raw_transaction')->nullable();

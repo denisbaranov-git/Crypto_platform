@@ -17,6 +17,8 @@ return new class extends Migration
             $table->string('address');
             $table->string('type');// тип кошелька type: hot/ cold/ sweep/ fee
             $table->string('encrypted_private_key');
+            $table->unsignedBigInteger('next_nonce')->default(0);
+            $table->timestamp('nonce_synced_at')->nullable();
             $table->unsignedBigInteger('current_nonce')->default(0);
             $table->string('status')->default('active'); //статус active disabled
             $table->timestamps();

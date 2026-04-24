@@ -25,4 +25,8 @@ final class Amount
     {
         return $this->value;
     }
+    public function isZero(): bool
+    {
+        return bccomp($this->value, '0', 18) === 0;
+    }
 }

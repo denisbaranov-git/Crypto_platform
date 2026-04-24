@@ -11,7 +11,8 @@ use DomainException;
 use Illuminate\Support\Facades\DB;
 
 /**
- * CHANGED:
+ * ConsumeWithdrawalHoldHandler для recovery-only !!!!! не основной flow
+ *
  * - recovery-only handler;
  * - safe if hold is already consumed;
  * - safe if withdrawal is already settled.

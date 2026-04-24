@@ -25,6 +25,8 @@ return new class extends Migration
             $table->decimal('fee_amount', 40, 18)->default(0);
             $table->decimal('network_fee_estimated_amount', 40, 18)->nullable();
             $table->decimal('network_fee_actual_amount', 40, 18)->nullable();
+            $table->foreignId('network_fee_currency_network_id')->nullable()->constrained('currency_networks')->nullOnDelete();
+            $table->timestamp('network_fee_posted_at')->nullable();
             $table->decimal('total_debit_amount', 40, 18);
 
             $table->foreignId('fee_rule_id')->nullable()->constrained('fee_rules')->nullOnDelete();
@@ -37,6 +39,7 @@ return new class extends Migration
             $table->uuid('reversal_operation_id')->nullable();
 
             $table->foreignId('system_wallet_id')->nullable()->constrained('system_wallets')->nullOnDelete();
+            $table->unsignedBigInteger('broadcast_nonce')->nullable();
 
             $table->string('txid')->nullable();
             $table->unsignedSmallInteger('broadcast_attempts')->default(0);

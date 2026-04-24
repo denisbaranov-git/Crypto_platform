@@ -15,7 +15,8 @@ export const useWalletsStore = defineStore('wallets', () => {
         loading.value = true
         try {
             const response = await fetchWallets()
-            wallets.value = response.data.data
+            // Предполагается, что API может возвращать { data: [...] } или { data: { data: [...] } }
+            wallets.value = response.data.data ?? response.data ?? []
         } finally {
             loading.value = false
         }
@@ -25,7 +26,7 @@ export const useWalletsStore = defineStore('wallets', () => {
         loading.value = true
         try {
             const response = await fetchWallet(id)
-            currentWallet.value = response.data
+            currentWallet.value = response.data.data ?? response.data ?? null
         } finally {
             loading.value = false
         }

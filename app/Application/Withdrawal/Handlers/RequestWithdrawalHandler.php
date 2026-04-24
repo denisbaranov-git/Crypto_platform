@@ -105,7 +105,7 @@ final class RequestWithdrawalHandler
              * status = reserved
              */
             //denis  need refactor  to   //ReserveWithdrawalFundsHandler      !!!!!!!!!!!!
-            $this->ledger->reserveFunds(
+            $this->ledger->reserveFunds( //создаёт hold
                 userId: $command->userId,
                 currencyNetworkId: $command->currencyNetworkId,
                 amount: $totalDebitAmount,

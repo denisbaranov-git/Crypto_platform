@@ -161,12 +161,12 @@ final class BitcoinClient implements BlockchainClient
         $wif = $this->normalizeBitcoinPrivateKey($privateKey, (bool) $network->is_testnet);
 
         $amountSats = $this->decimalToSats($withdrawal->amount()->value());
-
+        // получаем все UTXO
         $utxos = $this->rpc->call('listunspent', [1, 9999999, [$wallet->address]]);
         if (! is_array($utxos) || empty($utxos)) {
             throw new DomainException('No spendable UTXOs found for Bitcoin hot wallet.');
         }
-
+        // получаем сумые большие UXTO к сумме вывода, чтобы комиссия была меньше
         $selected = $this->selectUtxos($utxos, $amountSats);
         $inputTotal = array_sum(array_map(fn ($u) => (int) $u['satoshis'], $selected));
 
@@ -379,3 +379,293 @@ final class BitcoinClient implements BlockchainClient
         return $encoded;
     }
 }
+
+//                             //inspect and TO DO !!!!
+///**
+// * алгоритм Coin Control  Cтратегия выбора одного крупного UTXO вместо сбора мелочи(c последующей платы большого fee).
+// */
+//
+//php
+//<?php
+//
+//class BitcoinSmartWallet {
+//    private $rpcUrl;
+//    private $rpcUser;
+//    private $rpcPassword;
+//
+//    public function __construct($url, $user, $password) {
+//        $this->rpcUrl = $url;
+//        $this->rpcUser = $user;
+//        $this->rpcPassword = $password;
+//    }
+//
+//    /**
+//     * Базовый вызов RPC  //denis  replace to JsonRpcClient !!!!!!!!
+//     */
+//    private function callRPC($method, $params = []) {
+//        $ch = curl_init();
+//        curl_setopt($ch, CURLOPT_URL, $this->rpcUrl);
+//        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+//        curl_setopt($ch, CURLOPT_USERPWD, $this->rpcUser . ":" . $this->rpcPassword);
+//        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+//        curl_setopt($ch, CURLOPT_POST, true);
+//
+//        $payload = json_encode([
+//            'jsonrpc' => '1.0',
+//            'id' => time(),
+//            'method' => $method,
+//            'params' => $params
+//        ]);
+//
+//        curl_setopt($ch, CURLOPT_POSTFIELDS, $payload);
+//
+//        $response = curl_exec($ch);
+//        curl_close($ch);
+//
+//        $decoded = json_decode($response, true);
+//        if (isset($decoded['error'])) {
+//            throw new Exception("RPC Error: " . $decoded['error']['message']);
+//        }
+//
+//        return $decoded['result'];
+//    }
+//
+//    /**
+//     * Получаем список ВСЕХ непотраченных выходов (UTXO)
+//     */
+//    private function listUnspent() {
+//        return $this->callRPC('listunspent', [0, 9999999]);
+//    }
+//
+//    /**
+//     * "Умный" алгоритм выбора UTXO (Coin Selection)
+//     *
+//     * Стратегия: Найти ОДИН крупный вход, который покрывает сумму + комиссию + запас
+//     * Это предотвращает раздувание транзакции пылью
+//     */
+//    private function selectBestUtxo($targetAmount, $feeRatePerKb = 10000) {
+//        $utxos = $this->listUnspent();
+//
+//        if (empty($utxos)) {
+//            throw new Exception("Нет доступных UTXO");
+//        }
+//
+//        // Сортируем от большего к меньшему (чтобы брать крупные купюры)
+//        usort($utxos, function($a, $b) {
+//            return $b['amount'] <=> $a['amount'];
+//        });
+//
+//        $selected = null;
+//
+//        // Сценарий 1: Ищем идеальный один UTXO (Best Practice)
+//        // Ищем монету, которая: Больше чем (сумма + мин.комиссия)
+//        // Но не слишком большую, чтобы не создавать гигантскую сдачу
+//        foreach ($utxos as $utxo) {
+//            $estimatedFee = $this->estimateFeeForInputs([$utxo], 2, $feeRatePerKb);
+//
+//            if ($utxo['amount'] >= $targetAmount + $estimatedFee) {
+//                // Проверяем, не слишком ли много сдачи получится (опционально)
+//                // Если сдача меньше 0.0001 BTC - это пыль, можем проигнорировать
+//                $change = $utxo['amount'] - $targetAmount - $estimatedFee;
+//                if ($change > 0.00000500) { // Сдача должна быть > 500 сатоши
+//                    $selected = $utxo;
+//                    break;
+//                }
+//            }
+//        }
+//
+//        // Сценарий 2: Если одной монеты нет - берем САМУЮ КРУПНУЮ и добавляем к ней минимально
+//        // необходимых мелких (Жадный алгоритм)
+//        if (!$selected) {
+//            $totalSelected = 0;
+//            $selectedUtxos = [];
+//
+//            foreach ($utxos as $utxo) {
+//                $selectedUtxos[] = $utxo;
+//                $totalSelected += $utxo['amount'];
+//
+//                $estimatedFee = $this->estimateFeeForInputs($selectedUtxos, 2, $feeRatePerKb);
+//
+//                if ($totalSelected >= $targetAmount + $estimatedFee) {
+//                    $selected = $selectedUtxos;
+//                    break;
+//                }
+//            }
+//        }
+//
+//        if (!$selected) {
+//            throw new Exception("Недостаточно средств для покрытия суммы " . $targetAmount);
+//        }
+//
+//        return is_array($selected) && isset($selected['txid']) ? [$selected] : $selected;
+//    }
+//
+//    /**
+//     * Оценка комиссии для заданного набора входов
+//     * Формула: (Inputs * 68 + Outputs * 31 + 10) * FeeRate / 1000
+//     */
+//    private function estimateFeeForInputs($inputs, $outputsCount, $feeRatePerKb) {
+//        $inputsCount = is_array($inputs[0] ?? null) ? count($inputs) : 1;
+//        $txSizeVBytes = ($inputsCount * 68) + ($outputsCount * 31) + 10;
+//        // Комиссия в BTC = (размер в vBytes) * (sat/vB) / 100_000_000
+//        return ($txSizeVBytes * $feeRatePerKb) / 100000000;
+//    }
+//
+//    /**
+//     * Создание "умной" транзакции с явным указанием UTXO
+//     * Это и есть Coin Control в действии
+//     */
+//    public function sendWithCoinControl($toAddress, $amount) {
+//        // 1. Получаем текущую ставку комиссии из сети
+//        $feeRate = $this->getSmartFeeRate();
+//
+//        // 2. Выбираем входы по нашей "умной" стратегии
+//        $selectedInputs = $this->selectBestUtxo($amount, $feeRate);
+//
+//        echo "[DEBUG] Выбрано входов: " . count($selectedInputs) . "\n";
+//        foreach ($selectedInputs as $input) {
+//            echo "[DEBUG] - UTXO: " . $input['txid'] . ":" . $input['vout'] .
+//                " Сумма: " . $input['amount'] . " BTC\n";
+//        }
+//
+//        // 3. Формируем сырую транзакцию (Создаем черновик)
+//        $inputsForRpc = array_map(function($utxo) {
+//            return [
+//                'txid' => $utxo['txid'],
+//                'vout' => $utxo['vout']
+//            ];
+//        }, $selectedInputs);
+//
+//        $outputs = [
+//            $toAddress => $amount
+//        ];
+//
+//        // ВАЖНО: Используем createrawtransaction, НЕ fundrawtransaction
+//        // fundrawtransaction может добавить лишние входы и сломать нашу стратегию
+//        $rawTx = $this->callRPC('createrawtransaction', [$inputsForRpc, $outputs]);
+//
+//        // 4. Финальный расчет комиссии и добавление адреса сдачи
+//        // Получаем новый адрес для сдачи (лучше каждый раз новый для приватности)
+//        $changeAddress = $this->callRPC('getrawchangeaddress');
+//
+//        // Рассчитываем точную комиссию для этого конкретного набора входов
+//        $txHex = $rawTx;
+//        $decoded = $this->callRPC('decoderawtransaction', [$txHex]);
+//        $vBytes = $decoded['vsize'];
+//        $exactFee = ($vBytes * $feeRate) / 100000000; // в BTC
+//
+//        $totalInput = array_sum(array_column($selectedInputs, 'amount'));
+//        $change = $totalInput - $amount - $exactFee;
+//
+//        // Пересоздаем транзакцию с учетом сдачи
+//        $outputsWithChange = [
+//            $toAddress => $amount,
+//            $changeAddress => round($change, 8) // округляем до сатоши
+//        ];
+//
+//        $finalRawTx = $this->callRPC('createrawtransaction', [$inputsForRpc, $outputsWithChange]);
+//
+//        echo "[INFO] Сумма перевода: {$amount} BTC\n";
+//        echo "[INFO] Сдача: {$change} BTC на адрес {$changeAddress}\n";
+//        echo "[INFO] Комиссия сети: {$exactFee} BTC (~" . ($exactFee * 100000000) . " sat)\n";
+//        echo "[INFO] Задействовано входов: " . count($selectedInputs) . " (Размер транзакции: {$vBytes} vBytes)\n";
+//
+//        // 5. Подписываем транзакцию приватными ключами кошелька
+//        $signedTx = $this->callRPC('signrawtransactionwithwallet', [$finalRawTx]);
+//
+//        if (!$signedTx['complete']) {
+//            throw new Exception("Не удалось подписать транзакцию: " . json_encode($signedTx['errors']));
+//        }
+//
+//        // 6. Отправка в сеть (ТОЛЬКО ПОСЛЕ ПРОВЕРКИ В БУХГАЛТЕРИИ!)
+//        // Закомментировано для безопасности примера
+//        // $txId = $this->callRPC('sendrawtransaction', [$signedTx['hex']]);
+//        $txId = "debug_mode_no_broadcast_" . md5($signedTx['hex']);
+//
+//        return [
+//            'txid' => $txId,
+//            'amount' => $amount,
+//            'fee' => $exactFee,
+//            'inputs_used' => count($selectedInputs),
+//            'raw_hex' => $signedTx['hex'] // Для аудита
+//        ];
+//    }
+//
+//    /**
+//     * Получение оптимальной ставки комиссии из сети
+//     */
+//    private function getSmartFeeRate() {
+//        try {
+//            $estimates = $this->callRPC('estimatesmartfee', [6]); // 6 блоков ~ 1 час
+//            if (isset($estimates['feerate'])) {
+//                // feerate возвращается в BTC/kB, переводим в sat/vByte
+//                return ($estimates['feerate'] * 100000000) / 1000;
+//            }
+//        } catch (Exception $e) {
+//            // Fallback
+//        }
+//        return 10000; // 10 sat/vB - стандартный безопасный минимум
+//    }
+//
+//    /**
+//     * Отдельный метод для КОНСОЛИДАЦИИ (сбор пыли)
+//     * Это НЕ должно вызываться при выводе клиенту!
+//     */
+//    public function consolidateDust($minAmount = 0.001) {
+//        $utxos = $this->listUnspent();
+//        $dust = array_filter($utxos, function($utxo) use ($minAmount) {
+//            return $utxo['amount'] < $minAmount && $utxo['confirmations'] > 10;
+//        });
+//
+//        if (count($dust) < 10) {
+//            return "Недостаточно пыли для консолидации";
+//        }
+//
+//        echo "Запуск консолидации " . count($dust) . " пыльных UTXO в фоне...\n";
+//        // ... код консолидации (отправка всех пыльных входов на 1 адрес кошелька) ...
+//    }
+//}
+//
+//// ========== ИСПОЛЬЗОВАНИЕ В ПРОДАКШЕНЕ ==========
+//
+//$wallet = new BitcoinSmartWallet(
+//    'http://127.0.0.1:8332',
+//    'rpcuser',
+//    'rpcpassword'
+//);
+//
+//try {
+//    // Пример: Вывод 0.3 BTC клиенту
+//    $result = $wallet->sendWithCoinControl('bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh', 0.3);
+//
+//    echo "\n=== РЕЗУЛЬТАТ ОПЕРАЦИИ ===\n";
+//    echo "TXID: " . $result['txid'] . "\n";
+//    echo "Сумма клиенту: " . $result['amount'] . " BTC\n";
+//    echo "Расход на газ: " . $result['fee'] . " BTC\n";
+//    echo "Использовано входов: " . $result['inputs_used'] . "\n";
+//
+//    // Здесь должна быть запись в Ledger:
+//    // Debit: Expense (Network Fee) - $result['fee']
+//    // Debit: User Liability - $result['amount']
+//    // Credit: Hot Wallet Balance - ($result['amount'] + $result['fee'])
+//
+//} catch (Exception $e) {
+//    echo "Ошибка: " . $e->getMessage() . "\n";
+//}
+///**
+// * Ключевые моменты этого кода для продакшена:
+// * selectBestUtxo() — Сердце алгоритма. Он ищет одну большую купюру, а не собирает мелочь. Это напрямую экономит деньги платформы на комиссиях сети.
+// *
+// * createrawtransaction вместо fundrawtransaction
+// * Почему это важно: fundrawtransaction (автоматический режим) сам добавит 1000 мелких входов, если крупных не хватит. Мы явно указываем входы, реализуя Coin Control.
+// *
+// * Расчет комиссии ДО отправки
+// * В реальном коде обязательно нужно проверить, что $exactFee не превышает лимиты (например, не более 5% от суммы перевода), иначе можно случайно отдать $100 комиссии при переводе $10.
+// *
+// * Разделение консолидации и вывода
+// * Метод consolidateDust() — это отдельный cron-job на ночь. Он никогда не вызывается во время обработки запроса пользователя, чтобы пользователь не ждал 10 минут сборки огромной транзакции.
+// *
+// * Безопасность
+// * В примере вызов sendrawtransaction закомментирован. В реальном коде нужно сперва записать намерение в БД, убедиться, что бухгалтерская проводка зафиксирована,
+// * и только потом отправлять транзакцию в сеть. Иначе при падении PHP после отправки в сеть, но до записи в БД, вы потеряете след денег.
+// */

@@ -14,6 +14,8 @@ use Illuminate\Foundation\Queue\Queueable;
 /**
  * ConsumeWithdrawalHoldJob
  *
+ * ConsumeWithdrawalHoldJob для recovery-only!!!
+ *
  * if  Case A: broadcast succeeded, consume failed
  * Withdrawal:
  * status = broadcasted

@@ -14,7 +14,10 @@ final readonly class UpdateWithdrawalConfirmationsCommand
         public int $confirmations,
         public ?string $blockHash = null,
         public ?int $blockNumber = null,
-        public bool $finalized = false,
+        public ?bool $finalized = null,
         public array $metadata = [],
+        //
+        public ?string $actualFeeAmount = null,
+        public ?string $feeCurrencyCode = null,
     ) {}
 }

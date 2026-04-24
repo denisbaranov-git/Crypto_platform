@@ -235,17 +235,8 @@ final class EloquentLedgerService implements LedgerService
         ?int $referenceId = null,
         array $metadata = []
     ): void {
-        DB::transaction(function () use (
-            $holdId,
-            $operationId,
-            $referenceType,
-            $referenceId,
-            $metadata
-        ): void {
-            /**
-             * 1) create/find operation header
-             */
-            $operation = $this->findOrCreateOperation( //create LedgerOperation
+        DB::transaction(function () use ($holdId, $operationId, $referenceType, $referenceId, $metadata): void {
+            $operation = $this->findOrCreateOperation(
                 idempotencyKey: $operationId,
                 type: 'withdrawal_release',
                 referenceType: $referenceType,
@@ -257,9 +248,6 @@ final class EloquentLedgerService implements LedgerService
                 return;
             }
 
-            /**
-             * 2) lock hold
-             */
             $hold = EloquentLedgerHold::query()
                 ->whereKey($holdId)
                 ->lockForUpdate()
@@ -269,9 +257,6 @@ final class EloquentLedgerService implements LedgerService
                 return;
             }
 
-            /**
-             * 3) lock account and release reserved amount
-             */
             $account = EloquentAccount::query()
                 ->whereKey($hold->account_id)
                 ->lockForUpdate()
@@ -287,12 +272,24 @@ final class EloquentLedgerService implements LedgerService
 
             $hold->status = 'released';
             $hold->released_at = now();
-            $hold->metadata = array_merge($hold->metadata ?? [], [
+            $hold->metadata = array_merge((array) $hold->metadata, [
                 'release_operation_idempotency_key' => $operationId,
                 'reference_type' => $referenceType,
                 'reference_id' => $referenceId,
             ]);
             $hold->save();
+
+            $withdrawal = EloquentWithdrawal::query()
+                ->where('ledger_hold_id', $hold->id)
+                ->lockForUpdate()
+                ->first();
+
+            if ($withdrawal) {
+                $withdrawal->release_operation_id = $operationId;
+                $withdrawal->released_at = now();
+                $withdrawal->status = 'released';
+                $withdrawal->save();
+            }
 
             $operation->status = 'posted';
             $operation->posted_at = now();
@@ -301,11 +298,20 @@ final class EloquentLedgerService implements LedgerService
     }
 
     /**
-        LedgerService::consumeHold():
-            уменьшает reserved_balance
-            пишет double-entry через LedgerPostingService
-            hold → consumed
-            withdrawal → settled //denis  //нужен ли?
+     * LedgerService::consumeHold():
+     *
+     * уменьшает reserved_balance
+     * пишет double-entry через LedgerPostingService
+     * hold → consumed
+     * withdrawal → settled
+     *
+     *
+     * example:
+     * Если пользователь выводит 10 ETH и fee 2 ETH, то:
+     *
+     * user debit = 12
+     * clearing credit = 10
+     * fee_income credit = 2
      */
     public function consumeHold(
         int $holdId,
@@ -314,16 +320,7 @@ final class EloquentLedgerService implements LedgerService
         ?int $referenceId = null,
         array $metadata = []
     ): void {
-        DB::transaction(function () use (
-            $holdId,
-            $operationId,
-            $referenceType,
-            $referenceId,
-            $metadata
-        ): void {
-            /**
-             * 1) create/find operation header
-             */
+        DB::transaction(function () use ($holdId, $operationId, $referenceType, $referenceId, $metadata): void {
             $operation = $this->findOrCreateOperation(
                 idempotencyKey: $operationId,
                 type: 'withdrawal_consume',
@@ -336,21 +333,39 @@ final class EloquentLedgerService implements LedgerService
                 return;
             }
 
-            /**
-             * 2) lock hold
-             */
             $hold = EloquentLedgerHold::query()
                 ->whereKey($holdId)
                 ->lockForUpdate()
                 ->firstOrFail();
 
-            if ($hold->status === 'consumed') {
+            $withdrawal = EloquentWithdrawal::query()
+                ->where('ledger_hold_id', $hold->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ($withdrawal->consume_operation_id === $operationId || in_array($withdrawal->status, ['settled', 'confirmed', 'reversed'], true)) {
                 return;
+            }
+
+            if (bccomp((string) $hold->amount, (string) $withdrawal->total_debit_amount, 18) !== 0) {
+                throw new DomainException('Hold amount and withdrawal total debit amount mismatch.');
             }
 
             if ($hold->status !== 'active') {
                 throw new DomainException('Only active hold can be consumed.');
             }
+
+            $account = EloquentAccount::query()
+                ->whereKey($hold->account_id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (bccomp((string) $account->reserved_balance, (string) $hold->amount, 18) < 0) {
+                throw new DomainException('Reserved balance is less than hold amount.');
+            }
+
+            $clearing = $this->systemAccounts->resolveByCode('clearing', $hold->currency_network_id);
+            $feeIncome = $this->systemAccounts->resolveByCode('fee_income', $hold->currency_network_id);
             /**
              * 3) double-entry posting:
              *    - user debit
@@ -359,28 +374,29 @@ final class EloquentLedgerService implements LedgerService
              * IMPORTANT:
              * - posting service changes balance
              * - this method must NOT manually subtract balance
+             *
+             *  Posting happens inside the same DB transaction.
+             *  No nested DB::transaction inside posting service.
              */
-            $userAccount = EloquentAccount::query()
-                ->whereKey($hold->account_id)
-                ->lockForUpdate()
-                ->firstOrFail();
-
-            $clearingAccount = $this->systemAccounts->resolveByCode('clearing', $hold->currency_network_id);
-
-            if ($clearingAccount->id() === null) {
-                throw new DomainException('Clearing account is not persisted.');
-            }
-            /**
-             * Posting happens inside the same DB transaction.
-             * No nested DB::transaction inside posting service.
-             */
-            $this->posting->post(
+            $ledgerOperationId = $this->posting->post(
                 idempotencyKey: $operationId,
                 type: 'withdrawal_consume',
                 referenceType: $referenceType,
                 referenceId: $referenceId,
-                lines: [LedgerPostingLine::debit($userAccount->id, (string) $hold->amount, ['side' => 'user', 'hold_id' => $hold->id,]),
-                        LedgerPostingLine::credit($clearingAccount->id(), (string) $hold->amount, ['side' => 'clearing', 'hold_id' => $hold->id,])],
+                lines: [
+                    LedgerPostingLine::debit($account->id, (string) $withdrawal->total_debit_amount, [
+                        'side' => 'user',
+                        'hold_id' => $hold->id,
+                    ]),
+                    LedgerPostingLine::credit($clearing->id(), (string) $withdrawal->amount, [
+                        'side' => 'clearing',
+                        'withdrawal_id' => $withdrawal->id,
+                    ]),
+                    LedgerPostingLine::credit($feeIncome->id(), (string) $withdrawal->fee_amount, [
+                        'side' => 'fee_income',
+                        'withdrawal_id' => $withdrawal->id,
+                    ]),
+                ],
                 metadata: $metadata
             );
             /**
@@ -388,40 +404,136 @@ final class EloquentLedgerService implements LedgerService
              *    decrease reserved_balance
              *    do NOT touch balance here
              */
-            $freshAccount = EloquentAccount::query()
-                ->whereKey($userAccount->id)
-                ->lockForUpdate()
-                ->firstOrFail();
-
-            if (bccomp((string) $freshAccount->reserved_balance, (string) $hold->amount, 18) < 0) {
-                throw new DomainException('Reserved balance is less than hold amount.');
-            }
-
-            $freshAccount->reserved_balance = bcsub((string) $freshAccount->reserved_balance, (string) $hold->amount, 18);
-            $freshAccount->version = ((int) $freshAccount->version) + 1;
-            $freshAccount->save();
-
+            //            $freshAccount = EloquentAccount::query()
+//                ->whereKey($userAccount->id)
+//                ->lockForUpdate()
+//                ->firstOrFail();
+//
+//            if (bccomp((string) $freshAccount->reserved_balance, (string) $hold->amount, 18) < 0) {
+//                throw new DomainException('Reserved balance is less than hold amount.');
+//            }
+//
+//            $freshAccount->reserved_balance = bcsub((string) $freshAccount->reserved_balance, (string) $hold->amount, 18);
+//            $freshAccount->version = ((int) $freshAccount->version) + 1;
+//            $freshAccount->save();
+            $account->reserved_balance = bcsub((string) $account->reserved_balance, (string) $hold->amount, 18);
+            $account->version = ((int) $account->version) + 1;
+            $account->save();
             /**
              * 5) mark hold consumed
              */
             $hold->status = 'consumed';
             $hold->consumed_at = now();
-            $hold->metadata = array_merge($hold->metadata ?? [], [
-                'consume_operation_idempotency_key' => $operationId,
-                'reference_type' => $referenceType,
-                'reference_id' => $referenceId,
+            $hold->metadata = array_merge((array) $hold->metadata, [
+                'consume_operation_id' => $operationId,
+                'ledger_operation_uuid' => $ledgerOperationId,
             ]);
             $hold->save();
+
+            $withdrawal->consume_operation_id = $operationId;
+            $withdrawal->settled_at = now();
+            $withdrawal->status = 'settled';
+            $withdrawal->save();
 
             $operation->status = 'posted';
             $operation->posted_at = now();
             $operation->save();
         });
     }
+
+    /**
+     * @param int $withdrawalId
+     * @param int $currencyNetworkId
+     * @param string $amount
+     * @param string $operationId
+     * @param array $metadata
+     * @return void
+     *
+     * вызываем recordWithdrawalNetworkFeeExpense:
+     *
+     * из UpdateWithdrawalConfirmationsHandler
+     * после confirmation/finality, когда сеть уже стабильно приняла tx,
+     * когда tx уже confirmed/finalized и actual fee известна .
+     *
+     * recordWithdrawalNetworkFeeExpense() - Network fee Use only native currency
+     */
+    public function recordWithdrawalNetworkFeeExpense(
+        int $withdrawalId,
+        int $currencyNetworkId,
+        string $amount,
+        string $operationId,
+        array $metadata = []
+    ): void {
+        DB::transaction(function () use ($withdrawalId, $currencyNetworkId, $amount, $operationId, $metadata): void {
+            if (bccomp($amount, '0', 18) <= 0) {
+                return;
+            }
+
+            $withdrawal = EloquentWithdrawal::query()
+                ->whereKey($withdrawalId)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if (! empty($withdrawal->network_fee_posted_at)) {
+                return;
+            }
+
+            $hotWallet = $this->systemAccounts->resolveByCode('hot_wallet', $currencyNetworkId);
+            $expense = $this->systemAccounts->resolveByCode('network_fee_expense', $currencyNetworkId);
+
+            $this->posting->post(
+                idempotencyKey: $operationId,
+                type: 'withdrawal_network_fee',
+                referenceType: 'withdrawal',
+                referenceId: $withdrawalId,
+                lines: [
+                    LedgerPostingLine::debit($hotWallet->id(), $amount, [
+                        'side' => 'hot_wallet',
+                        'withdrawal_id' => $withdrawalId,
+                    ]),
+                    LedgerPostingLine::credit($expense->id(), $amount, [
+                        'side' => 'network_fee_expense',
+                        'withdrawal_id' => $withdrawalId,
+                    ]),
+                ],
+                metadata: $metadata
+            );
+
+            $withdrawal->network_fee_currency_network_id = $currencyNetworkId;
+            $withdrawal->network_fee_posted_at = now();
+            $withdrawal->network_fee_actual_amount = $amount;
+            $withdrawal->network_fee_operation_id = $operationId;
+            $withdrawal->save();
+        });
+    }
+
+    /**
+     * reverseWithdrawalConsumption:
+     *
+     * principal возвращается пользователю;
+     * withdrawal fee тоже возвращается пользователю;
+     * чистый доход платформы отменяется;
+     * withdrawal получает terminal compensation state reversed.
+     *
+     *
+     * reverseWithdrawalNetworkFeeExpense() when and where to call it:
+     * When:
+     * Only when the withdrawal already had:
+     * network_fee_posted_at set,
+     * network_fee_operation_id set.
+     * That means gas expense was already booked as canonical ledger fact.
+     * Where:
+     * Inside reverseWithdrawalConsumption() after reversing principal + fee income.
+     * Why
+     * Because:
+     * if reorg happened before consume, network fee should not be booked yet;
+     * if it was already booked, reorg must reverse it too.
+     */
     public function reverseWithdrawalConsumption(
         int $withdrawalId,
         array $metadata = []
     ): void {
+
         DB::transaction(function () use ($withdrawalId, $metadata): void {
             $withdrawal = EloquentWithdrawal::query()
                 ->whereKey($withdrawalId)
@@ -444,6 +556,7 @@ final class EloquentLedgerService implements LedgerService
                 ->firstOrFail();
 
             $clearing = $this->systemAccounts->resolveByCode('clearing', $withdrawal->currency_network_id);
+            $feeIncome = $this->systemAccounts->resolveByCode('fee_income', $withdrawal->currency_network_id);
 
             $operationId = 'withdrawal:' . $withdrawal->id . ':reversal';
 
@@ -453,8 +566,18 @@ final class EloquentLedgerService implements LedgerService
                 referenceType: 'withdrawal',
                 referenceId: $withdrawalId,
                 lines: [
-                    LedgerPostingLine::debit($clearing->id(), (string) $withdrawal->amount, ['side' => 'clearing']),
-                    LedgerPostingLine::credit($userAccount->id, (string) $withdrawal->amount, ['side' => 'user']),
+                    LedgerPostingLine::debit($clearing->id(), (string) $withdrawal->amount, [
+                        'side' => 'clearing',
+                        'withdrawal_id' => $withdrawal->id,
+                    ]),
+                    LedgerPostingLine::debit($feeIncome->id(), (string) $withdrawal->fee_amount, [
+                        'side' => 'fee_income',
+                        'withdrawal_id' => $withdrawal->id,
+                    ]),
+                    LedgerPostingLine::credit($userAccount->id, (string) $withdrawal->total_debit_amount, [
+                        'side' => 'user',
+                        'withdrawal_id' => $withdrawal->id,
+                    ]),
                 ],
                 metadata: $metadata
             );
@@ -464,7 +587,66 @@ final class EloquentLedgerService implements LedgerService
             $withdrawal->reversal_reason = $metadata['reason'] ?? 'chain_reorg';
             $withdrawal->status = 'reversed';
             $withdrawal->save();
+//            //     * Reverse network fee if reorg happens after booking
+//            if (! empty($withdrawal->network_fee_posted_at) && ! empty($withdrawal->network_fee_operation_id)) {
+//                $this->reverseWithdrawalNetworkFeeExpense(
+//                    withdrawalId: $withdrawalId,
+//                    metadata: array_merge($metadata, [
+//                        'reason' => 'withdrawal_reorg',
+//                        'source' => 'reverse_withdrawal_consumption',
+//                    ])
+//                );
+//            }
         });
+    }
+
+
+    public function reverseWithdrawalNetworkFeeExpense(
+        int $withdrawalId,
+        array $metadata = []
+    ): void {
+//        DB::transaction(function () use ($withdrawalId, $metadata): void {
+//            $withdrawal = EloquentWithdrawal::query()
+//                ->whereKey($withdrawalId)
+//                ->lockForUpdate()
+//                ->firstOrFail();
+//
+//            if (empty($withdrawal->network_fee_posted_at) || empty($withdrawal->network_fee_operation_id)) {
+//                return;
+//            }
+//
+//            if (! empty($withdrawal->network_fee_reversal_operation_id)) {
+//                return;
+//            }
+//
+//            if (empty($withdrawal->network_fee_currency_network_id)) {
+//                throw new DomainException('Missing network fee currency network id.');
+//            }
+//
+//            $hotWallet = $this->systemAccounts->resolveByCode('hot_wallet', (int) $withdrawal->network_fee_currency_network_id);
+//            $expense = $this->systemAccounts->resolveByCode('network_fee_expense', (int) $withdrawal->network_fee_currency_network_id);
+//
+//            $opId = 'withdrawal:' . $withdrawalId . ':network_fee:reversal';
+//
+//            $this->posting->post(
+//                idempotencyKey: $opId,
+//                type: 'withdrawal_network_fee_reversal',
+//                referenceType: 'withdrawal',
+//                referenceId: $withdrawalId,
+//                lines: [
+//                    LedgerPostingLine::credit($hotWallet->id(), (string) $withdrawal->network_fee_actual_amount, [
+//                        'side' => 'hot_wallet',
+//                    ]),
+//                    LedgerPostingLine::debit($expense->id(), (string) $withdrawal->network_fee_actual_amount, [
+//                        'side' => 'network_fee_expense',
+//                    ]),
+//                ],
+//                metadata: $metadata
+//            );
+//
+//            $withdrawal->network_fee_reversal_operation_id = $opId;
+//            $withdrawal->save();
+//        });
     }
     private function findOrCreateOperation(
         string $idempotencyKey,

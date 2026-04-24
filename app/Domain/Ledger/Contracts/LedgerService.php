@@ -43,6 +43,19 @@ interface LedgerService
         array $metadata = []
     ): void;
 
+    public function recordWithdrawalNetworkFeeExpense(
+        int $withdrawalId,
+        int $currencyNetworkId,
+        string $amount,
+        string $operationId,
+        array $metadata = []
+    );
+
+    public function reverseWithdrawalConsumption(
+        int $withdrawalId,
+        array $metadata = []
+    );
+
     public function transferInternal(
         int $fromUserId,
         int $toUserId,

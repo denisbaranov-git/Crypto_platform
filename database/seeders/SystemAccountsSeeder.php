@@ -37,6 +37,11 @@ final class SystemAccountsSeeder extends Seeder
                 'name' => 'Hot Wallet Mirror Account',
                 'purpose' => 'Ledger mirror of hot wallet balance.',
             ],
+            [
+                'code' => 'network_fee_expense',
+                'name' => 'Network Fee Expense',
+                'purpose' => 'Blockchain gas / network fee expense',
+            ],
         ];
 
         foreach ($items as $item) {

@@ -8,6 +8,8 @@ use App\Application\Withdrawal\Commands\HandleWithdrawalReorgCommand;
 use App\Application\Withdrawal\Commands\UpdateWithdrawalConfirmationsCommand;
 use App\Domain\Withdrawal\Repositories\WithdrawalRepository;
 use App\Domain\Withdrawal\Services\WithdrawalConfirmationRequirementResolver;
+use App\Infrastructure\Ledger\Services\EloquentLedgerService;
+use App\Infrastructure\Persistence\Eloquent\Models\EloquentCurrencyNetwork;
 use DomainException;
 use Illuminate\Support\Facades\DB;
 
@@ -16,7 +18,7 @@ final class UpdateWithdrawalConfirmationsHandler
     public function __construct(
         private readonly WithdrawalRepository $withdrawals,
         private readonly WithdrawalConfirmationRequirementResolver $requirements,
-        private readonly HandleWithdrawalReorgHandler $handleReorg,
+        private readonly EloquentLedgerService $ledger,
     ) {}
 
     public function handle(UpdateWithdrawalConfirmationsCommand $command): void
@@ -32,30 +34,6 @@ final class UpdateWithdrawalConfirmationsHandler
                 return;
             }
 
-            // Reorg detection if we already had a confirmed snapshot and current block hash differs.
-            if (
-                $withdrawal->confirmedBlockNumber() !== null &&
-                $withdrawal->confirmedBlockHash() !== null &&
-                $command->blockNumber !== null &&
-                $command->blockHash !== null &&
-                $withdrawal->confirmedBlockNumber() === $command->blockNumber &&
-                $withdrawal->confirmedBlockHash() !== $command->blockHash
-            ) {
-                $withdrawal->markReorged(
-                    reason: 'canonical_block_hash_mismatch',
-                    reorgBlockNumber: $withdrawal->confirmedBlockNumber()
-                );
-                $this->withdrawals->save($withdrawal);
-
-                $this->handleReorg->handle(new HandleWithdrawalReorgCommand(
-                    withdrawalId: $withdrawal->id()->value(),
-                    reason: 'canonical_block_hash_mismatch',
-                    metadata: $command->metadata
-                ));
-
-                return;
-            }
-
             if ($withdrawal->status() === 'confirmed') {
                 return;
             }
@@ -64,12 +42,21 @@ final class UpdateWithdrawalConfirmationsHandler
                 return;
             }
 
+            if ($command->blockNumber !== null && $command->blockHash !== null) {
+                $withdrawal->setConfirmedSnapshot(
+                    blockNumber: $command->blockNumber,
+                    blockHash: $command->blockHash,
+                    confirmations: $command->confirmations
+                );
+            }
+
             $required = $this->requirements->resolve(
                 $command->currencyNetworkId,
                 $withdrawal->amount()->value()
             );
 
             if (! $command->finalized && $command->confirmations < $required) {
+                $this->withdrawals->save($withdrawal);
                 return;
             }
 
@@ -78,7 +65,34 @@ final class UpdateWithdrawalConfirmationsHandler
                 blockNumber: $command->blockNumber,
                 blockHash: $command->blockHash
             );
+
             $this->withdrawals->save($withdrawal);
+
+            // Network fee booking only after confirmed/finalized.
+            if ($command->actualFeeAmount !== null && bccomp($command->actualFeeAmount, '0', 18) > 0) {
+                $nativeCurrencyNetworkId = $this->resolveNativeCurrencyNetworkId($command->networkId);
+
+                $this->ledger->recordWithdrawalNetworkFeeExpense(
+                    withdrawalId: $withdrawal->id()->value(),
+                    currencyNetworkId: $nativeCurrencyNetworkId,
+                    amount: $command->actualFeeAmount,
+                    operationId: 'withdrawal:' . $withdrawal->id()->value() . ':network_fee:' . $withdrawal->txid()->value(),
+                    metadata: array_merge($command->metadata, [
+                        'txid' => $withdrawal->txid()->value(),
+                        'fee_currency_code' => $command->feeCurrencyCode,
+                    ])
+                );
+            }
         });
+    }
+
+    private function resolveNativeCurrencyNetworkId(int $networkId): int
+    {
+        $native = EloquentCurrencyNetwork::query()
+            ->where('network_id', $networkId)
+            ->whereNull('contract_address')
+            ->firstOrFail();
+
+        return (int) $native->id;
     }
 }

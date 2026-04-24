@@ -1,16 +1,15 @@
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/auth'
-import { useWalletsStore } from '@/stores/wallets'
-import { useWithdrawalsStore } from '@/stores/withdrawals'
+import {computed, onMounted, onUnmounted, reactive, ref, watch} from 'vue'
+import {useRoute} from 'vue-router'
+import {useAuthStore} from '@/stores/auth'
+import {useWalletsStore} from '@/stores/wallets'
+import {useWithdrawalsStore} from '@/stores/withdrawals'
 import WithdrawalStatusBadge from '@/components/WithdrawalStatusBadge.vue'
 
 const auth = useAuthStore()
 const walletsStore = useWalletsStore()
 const withdrawalsStore = useWithdrawalsStore()
 const route = useRoute()
-const router = useRouter()
 
 const form = reactive({
     wallet_id: '',
@@ -30,21 +29,35 @@ const selectedWallet = computed(() =>
     walletsStore.wallets.find((w) => String(w.id) === String(form.wallet_id))
 )
 
-// Важно: ваши wallet API должны возвращать network_id и currency_network_id.
-// Если их нет, добавьте их в ответ WalletController.
 function syncWalletFields() {
     if (!selectedWallet.value) return
 
     form.network_id = selectedWallet.value.network_id
     form.currency_network_id = selectedWallet.value.currency_network_id
 
-    // Удобный UX: если у кошелька уже есть активный адрес, можно подставить его.
     if (!form.destination_address && selectedWallet.value.active_address) {
         form.destination_address = selectedWallet.value.active_address
     }
 }
 
 watch(selectedWallet, syncWalletFields)
+
+function resetForm() {
+    form.wallet_id = ''
+    form.network_id = ''
+    form.currency_network_id = ''
+    form.destination_address = ''
+    form.destination_tag = ''
+    form.amount = ''
+    form.note = ''
+}
+
+function startNewWithdrawal() {
+    withdrawalsStore.startNewDraft()
+    resetForm()
+    formError.value = null
+    formSuccess.value = ''
+}
 
 function presetFromQuery() {
     const walletId = route.query.wallet_id
@@ -56,7 +69,7 @@ function presetFromQuery() {
 async function refresh() {
     await Promise.all([
         walletsStore.loadWallets(),
-        withdrawalsStore.loadWithdrawals({ per_page: 20 }),
+        withdrawalsStore.loadWithdrawals({per_page: 20}),
     ])
 }
 
@@ -79,22 +92,9 @@ async function submit() {
         })
 
         formSuccess.value = `Withdrawal #${created.id} created successfully.`
-
-        // Очищаем только ввод пользователя, wallet selection оставляем.
-        form.destination_address = ''
-        form.destination_tag = ''
-        form.amount = ''
-        form.note = ''
-
-        await withdrawalsStore.loadWithdrawals({ per_page: 20 })
-
-        // Если хотите, можно автоперекинуть на detail:
-        // router.push(`/withdrawals/${created.id}`)
+        resetForm()
     } catch (e) {
-        formError.value =
-            e?.response?.data?.message ||
-            e?.message ||
-            'Unable to create withdrawal'
+        formError.value = e?.response?.data?.message || e?.message || 'Unable to create withdrawal'
     }
 }
 
@@ -108,11 +108,15 @@ onMounted(async () => {
         await auth.fetchUser()
     }
 
+    // Important:
+    // key is created when the form is opened
+    // or at the first draft lifecycle moment.
+    withdrawalsStore.ensureDraftKey()
+
     await refresh()
     presetFromQuery()
     syncWalletFields()
 
-    // Поллинг как в остальных экранах.
     timerId = setInterval(refresh, 15000)
 })
 
@@ -130,7 +134,7 @@ onUnmounted(() => {
             <div>
                 <h1 class="text-3xl font-semibold">Withdrawals</h1>
                 <p class="mt-1 text-sm text-slate-400">
-                    Create a withdrawal, track broadcast, settlement and confirmation.
+                    Create a withdrawal, then track broadcast, settlement and confirmation.
                 </p>
             </div>
 
@@ -140,16 +144,34 @@ onUnmounted(() => {
             </div>
         </div>
 
-        <div class="grid gap-6 xl:grid-cols-2">
-            <!-- Left: create withdrawal -->
-            <section class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
-                <h2 class="text-lg font-semibold">New withdrawal</h2>
+        <div class="rounded-2xl border border-slate-800 bg-slate-900 p-4 text-xs text-slate-400">
+            Draft idempotency key:
+            <span class="break-all text-slate-200">
+                {{ withdrawalsStore.draft.idempotencyKey || 'none' }}
+            </span>
+        </div>
 
-                <div v-if="formError" class="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
+        <div class="grid gap-6 xl:grid-cols-2">
+            <section class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
+                <div class="flex items-center justify-between gap-3">
+                    <h2 class="text-lg font-semibold">New withdrawal</h2>
+
+                    <button
+                        class="rounded-lg border border-slate-700 px-3 py-2 text-sm hover:bg-slate-800"
+                        type="button"
+                        @click="startNewWithdrawal"
+                    >
+                        New withdrawal
+                    </button>
+                </div>
+
+                <div v-if="formError"
+                     class="mt-4 rounded-xl border border-rose-500/30 bg-rose-500/10 px-4 py-3 text-sm text-rose-200">
                     {{ formError }}
                 </div>
 
-                <div v-if="formSuccess" class="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
+                <div v-if="formSuccess"
+                     class="mt-4 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-200">
                     {{ formSuccess }}
                 </div>
 
@@ -160,6 +182,8 @@ onUnmounted(() => {
                             v-model="form.wallet_id"
                             class="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none"
                             required
+                            @focus="withdrawalsStore.ensureDraftKey()"
+                            @change="withdrawalsStore.ensureDraftKey()"
                         >
                             <option value="" disabled>Select wallet</option>
                             <option
@@ -202,6 +226,7 @@ onUnmounted(() => {
                             class="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none"
                             placeholder="Enter external wallet address"
                             required
+                            @input="withdrawalsStore.ensureDraftKey()"
                         />
                     </div>
 
@@ -212,6 +237,7 @@ onUnmounted(() => {
                             type="text"
                             class="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none"
                             placeholder="Optional"
+                            @input="withdrawalsStore.ensureDraftKey()"
                         />
                     </div>
 
@@ -225,6 +251,7 @@ onUnmounted(() => {
                                 class="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none"
                                 placeholder="0.00"
                                 required
+                                @input="withdrawalsStore.ensureDraftKey()"
                             />
                         </div>
 
@@ -235,16 +262,9 @@ onUnmounted(() => {
                                 type="text"
                                 class="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-3 outline-none"
                                 placeholder="Optional note"
+                                @input="withdrawalsStore.ensureDraftKey()"
                             />
                         </div>
-                    </div>
-
-                    <div class="rounded-xl bg-slate-950 p-4 text-sm text-slate-400">
-                        <div class="font-medium text-slate-200">Fee policy</div>
-                        <p class="mt-2">
-                            Fee is calculated server-side from <code>fee_rules</code>.
-                            The backend will reserve <code>amount + fee</code>.
-                        </p>
                     </div>
 
                     <button
@@ -257,7 +277,6 @@ onUnmounted(() => {
                 </form>
             </section>
 
-            <!-- Right: wallet context -->
             <section class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
                 <h2 class="text-lg font-semibold">Selected wallet</h2>
 
@@ -290,12 +309,11 @@ onUnmounted(() => {
                 </div>
 
                 <div v-else class="mt-4 text-sm text-slate-400">
-                    Select a wallet to prefill network fields and withdrawal context.
+                    Select a wallet to prefill network fields.
                 </div>
             </section>
         </div>
 
-        <!-- Withdrawals list -->
         <section class="rounded-2xl border border-slate-800 bg-slate-900 p-5">
             <div class="flex items-center justify-between gap-4">
                 <h2 class="text-lg font-semibold">Recent withdrawals</h2>
@@ -324,7 +342,7 @@ onUnmounted(() => {
                                 <div class="text-sm font-medium">
                                     #{{ w.id }} · {{ w.amount }}
                                 </div>
-                                <WithdrawalStatusBadge :status="w.status" />
+                                <WithdrawalStatusBadge :status="w.status"/>
                             </div>
 
                             <div class="text-xs text-slate-400">

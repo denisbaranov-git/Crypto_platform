@@ -12,5 +12,10 @@ final readonly class BlockchainTransactionStatus
         public ?string $blockHash,
         public int $confirmations,
         public bool $finalized = false,
+//
+        public ?string $actualFeeAmount = null,
+        public ?string $feeCurrencyCode = null,
+        public ?string $gasUsed = null,
+        public ?string $effectiveGasPrice = null,
     ) {}
 }
