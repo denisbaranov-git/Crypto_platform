@@ -157,7 +157,7 @@ final class TronClient implements BlockchainClient
         $head = $this->headBlock();
         $confirmations = max(0, $head - $blockNumber + 1);
 
-        $required = (int) config('withdrawal.confirmations.default_blocks', 12);
+        $required = (int) config('blockchain.confirmations.default_blocks', 12);
 
         return new BlockchainTransactionStatus(
             txid: $txid,
@@ -273,6 +273,10 @@ final class TronClient implements BlockchainClient
         return $txid;
     }
 
+    /**
+     * Метод tokenFeeLimitSun() возвращает целое число (int), которое представляет собой лимит комиссии,
+     * выраженный в Sun (минимальной единице криптовалюты TRX, аналогично сатоши в биткоине: 1 TRX = 1,000,000 Sun).
+     */
     private function tokenFeeLimitSun(): int
     {
         return (int) config('withdrawal.tron.token_fee_limit_sun', 15_000_000);

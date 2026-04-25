@@ -20,7 +20,7 @@ Schedule::call(function (): void {
         dispatch(new RefreshDepositConfirmationsJob($networkId))->onQueue('deposits');
         //withdrawal
         dispatch(new ConfirmWithdrawalJob((int) $networkId));
-        dispatch(new ReconcileStuckWithdrawalsJob((int) $networkId));
+        dispatch(new ReconcileStuckWithdrawalsJob((int) $networkId)); // здесь тоже запускаем ConfirmWithdrawalJob!!!!!! //denis
     }
     dispatch(new OutboxRelayJob(batchSize: 100))->onQueue('outbox');
 })

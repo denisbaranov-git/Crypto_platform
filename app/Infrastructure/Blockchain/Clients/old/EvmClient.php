@@ -81,7 +81,7 @@ final class EvmClient implements BlockchainClient
                 'toBlock'   => $hexBlock,
                 'address'   => $contractAddresses,
                 'topics'    => [
-                    config('deposit.evm.transfer_signature'),
+                    config('blockchain.evm.transfer_signature'),
                 ],
             ]]);
 

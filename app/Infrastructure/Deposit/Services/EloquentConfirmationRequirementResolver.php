@@ -34,7 +34,7 @@ final class EloquentConfirmationRequirementResolver implements ConfirmationRequi
             ->where('id', $currencyNetworkId)
             ->value('min_confirmations');
 
-        return ConfirmationRequirement::blocks((int) ($fallback ?: config('deposit.confirmations.default_blocks', 12)));
+        return ConfirmationRequirement::blocks((int) ($fallback ?: config('blockchain.confirmations.default_blocks', 12)));
     }
 
     private function matchesAmount(string $amount, mixed $threshold): bool

@@ -99,7 +99,7 @@ final class EvmClient implements BlockchainClient
                 'toBlock'   => $hexBlock,
                 'address'   => $contractAddresses,
                 'topics'    => [
-                    config('deposit.evm.transfer_signature'),
+                    config('blockchain.evm.transfer_signature'),
                 ],
             ]]);
 
@@ -163,7 +163,7 @@ final class EvmClient implements BlockchainClient
         $head = $this->headBlock();
         $confirmations = max(0, $head - $blockNumber + 1);
 
-        $required = (int) config('withdrawal.confirmations.default_blocks', 12);
+        $required = (int) config('blockchain.confirmations.default_blocks', 12);
 
         return new BlockchainTransactionStatus(
             txid: $txid,
