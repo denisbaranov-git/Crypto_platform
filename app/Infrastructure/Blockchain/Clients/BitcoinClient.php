@@ -133,7 +133,7 @@ final class BitcoinClient implements BlockchainClient
         }
 
         $confirmations = (int) ($tx['confirmations'] ?? 0);
-        $required = (int) config('withdrawal.confirmations.default_blocks', 6);
+        $required = (int) config('blockchain.confirmations.default_blocks', 6);
 
         return new BlockchainTransactionStatus(
             txid: $txid,

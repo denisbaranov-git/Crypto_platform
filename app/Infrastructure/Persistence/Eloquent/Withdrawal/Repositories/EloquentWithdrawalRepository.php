@@ -66,4 +66,18 @@ final class EloquentWithdrawalRepository implements WithdrawalRepository
 
         return $rows->map(fn (EloquentWithdrawal $row) => $this->mapper->toDomain($row))->all();
     }
+    public function findByNetworkAndBlockNumberBetween( int $networkId, int $rewindTo, int $oldLastProcessedBlock): array
+    {
+        $rows = EloquentWithdrawal::query()
+            ->where('network_id', $networkId)
+            ->whereNotNull('block_number')
+            ->whereBetween('block_number', [$rewindTo, $oldLastProcessedBlock])
+            ->whereIn('status', ['broadcasted', 'settled', 'confirmed', 'reorged'])
+            ->orderBy('block_number')
+            ->orderBy('id')
+            ->get();
+
+        return $rows->map(fn (EloquentWithdrawal $row) => $this->mapper->toDomain($row))->all();
+    }
+
 }

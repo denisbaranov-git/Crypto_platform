@@ -43,7 +43,7 @@ final class UpdateWithdrawalConfirmationsHandler
             }
 
             if ($command->blockNumber !== null && $command->blockHash !== null) {
-                $withdrawal->setConfirmedSnapshot(
+                $withdrawal->setConfirmSnapshot(
                     blockNumber: $command->blockNumber,
                     blockHash: $command->blockHash,
                     confirmations: $command->confirmations

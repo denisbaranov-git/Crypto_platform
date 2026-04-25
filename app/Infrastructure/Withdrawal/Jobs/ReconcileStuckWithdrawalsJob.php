@@ -10,6 +10,7 @@ use App\Infrastructure\Withdrawal\Jobs\BroadcastWithdrawalJob;
 use App\Infrastructure\Withdrawal\Jobs\ConsumeWithdrawalHoldJob;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Log;
 
 /**
  * CHANGED:
@@ -22,7 +23,7 @@ use Illuminate\Foundation\Queue\Queueable;
 //
 //reserved too long and has`t txid  → dispatch BroadcastWithdrawalJob
 //broadcasted too long and has txid, but has`t consume → dispatch → dispatch ConsumeWithdrawalHoldJob
-//settled too long and not confirmed → dispatch ConfirmWithdrawalJob
+//settled too long and not confirmed → dispatch ConfirmWithdrawalJob - deprecated
 
 final class ReconcileStuckWithdrawalsJob implements ShouldQueue
 {
@@ -38,36 +39,51 @@ final class ReconcileStuckWithdrawalsJob implements ShouldQueue
     public function handle(): void
     {
         $now = now();
+        // How long a withdrawal may stay without progressing before we recover it.
+        $staleMinutes = (int) config('withdrawal.recovery.stale_minutes', 15);
 
-        $reservedMinutes = (int) config('withdrawal.recovery.stale_reserved_minutes', 15);
-        $broadcastedMinutes = (int) config('withdrawal.recovery.stale_broadcasted_minutes', 15);
-        $settledMinutes = (int) config('withdrawal.recovery.stale_settled_minutes', 15);
+        //$reservedMinutes = (int) config('withdrawal.recovery.stale_reserved_minutes', 15);
+        //$broadcastedMinutes = (int) config('withdrawal.recovery.stale_broadcasted_minutes', 15);
+        //$settledMinutes = (int) config('withdrawal.recovery.stale_settled_minutes', 15);
 
-        EloquentWithdrawal::query()
+        // 1) Broadcast was not completed in time.
+        $staleToBroadcast = EloquentWithdrawal::query()
             ->where('network_id', $this->networkId)
-            ->where('status', 'reserved')
-            ->where('updated_at', '<=', $now->copy()->subMinutes($reservedMinutes))
+            ->whereIn('status', ['reserved', 'broadcast_pending'])
+            ->where('updated_at', '<=', $now->copy()->subMinutes($staleMinutes)) //updated_at <= now - $staleMinutes,| copy() что бы now не изменился
             ->orderBy('id')
             ->limit(100)
-            ->get()
-            ->each(fn ($row) => dispatch(new BroadcastWithdrawalJob((int) $row->id)));
+            ->get();
 
-        EloquentWithdrawal::query()
+        foreach ($staleToBroadcast as $row) {
+            dispatch(new BroadcastWithdrawalJob((int) $row->id))
+                ->onQueue('withdrawals');
+        }
+
+        // 2) Broadcast happened, but consume/settlement may have been interrupted.
+        $staleToConfirm = EloquentWithdrawal::query()
             ->where('network_id', $this->networkId)
-            ->where('status', 'broadcasted')
-            ->where('updated_at', '<=', $now->copy()->subMinutes($broadcastedMinutes))
+            ->whereIn('status', ['broadcasted', 'settled'])
+            ->whereNotNull('txid')
+            ->where('updated_at', '<=', $now->copy()->subMinutes($staleMinutes))
             ->orderBy('id')
             ->limit(100)
-            ->get()
-            ->each(fn ($row) => dispatch(new ConsumeWithdrawalHoldJob((int) $row->id)));
+            ->get();
 
-        EloquentWithdrawal::query()
-            ->where('network_id', $this->networkId)
-            ->where('status', 'settled')
-            ->where('updated_at', '<=', $now->copy()->subMinutes($settledMinutes))
-            ->orderBy('id')
-            ->limit(100)
-            ->get()
-            ->each(fn ($row) => dispatch(new ConfirmWithdrawalJob((int) $this->networkId)));
+//        EloquentWithdrawal::query()
+//            ->where('network_id', $this->networkId)
+//            ->where('status', 'settled')
+//            ->where('updated_at', '<=', $now->copy()->subMinutes($settledMinutes))
+//            ->orderBy('id')
+//            ->limit(100)
+//            ->get()
+//            ->each(fn ($row) => dispatch(new ConfirmWithdrawalJob((int) $this->networkId)));
+
+        if ($staleToConfirm->isNotEmpty()) {
+            Log::channel('ops')->info('Stale withdrawals found for confirmation recovery', [
+                'network_id' => $this->networkId,
+                'count' => $staleToConfirm->count(),
+            ]);
+        }
     }
 }

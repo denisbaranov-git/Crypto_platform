@@ -30,7 +30,7 @@ final class RefreshDepositConfirmationsJob implements ShouldQueue
     ): void {
         $network = Network::query()->findOrFail($this->networkId);
         $cursor = $cursors->get($network->id);
-//config/deposit.php
+//config/blockchain.php
 // return [
 //    'scanner' => [
 //        'default_safety_margin_blocks' => 12,
@@ -59,7 +59,7 @@ final class RefreshDepositConfirmationsJob implements ShouldQueue
 //            'transfer_signature' => '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
 //        ],
 //];
-        $networkConfig = config("deposit.scanner.networks.{$network->code}", []); //denis //move to DB
+        $networkConfig = config("blockchain.scanner.networks.{$network->code}", []); //denis //move to DB
         $scanInterval = (int) ($networkConfig['scan_interval_seconds'] ?? 60);
 
         if ($cursor->scanned_at && $cursor->scanned_at->diffInSeconds(now()) < $scanInterval) {

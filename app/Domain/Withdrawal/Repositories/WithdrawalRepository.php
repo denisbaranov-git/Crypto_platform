@@ -20,4 +20,4 @@ interface WithdrawalRepository
      * Open = needs confirmation polling.
      */
     public function findOpenByNetwork(int $networkId, int $limit = 500): array;
-}
+    public function findByNetworkAndBlockNumberBetween( int $networkId, int $rewindTo, int $oldLastProcessedBlock): array;}

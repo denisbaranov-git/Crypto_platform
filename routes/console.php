@@ -19,13 +19,26 @@ Schedule::call(function (): void {
         dispatch(new ScanNetworkBlocksJob($networkId))->onQueue('deposits');
         dispatch(new RefreshDepositConfirmationsJob($networkId))->onQueue('deposits');
         //withdrawal
-        dispatch(new ConfirmWithdrawalJob((int) $networkId));
-        dispatch(new ReconcileStuckWithdrawalsJob((int) $networkId));
+        dispatch(new ConfirmWithdrawalJob((int) $networkId))->onQueue('withdrawals');
     }
     dispatch(new OutboxRelayJob(batchSize: 100))->onQueue('outbox');
 })
-    ->everyMinute()
+    ->everyMinute()// через 1min
     ->name('process-deposits-withdrawal-and-outbox')
+    ->withoutOverlapping()
+    ->onOneServer();
+
+Schedule::call(function (): void {
+    $networkIds = EloquentNetwork::query()
+        //->where('is_testnet', false) // if test
+        ->pluck('id');
+    foreach ($networkIds as $networkId) {
+        //withdrawal
+        dispatch(new ReconcileStuckWithdrawalsJob((int) $networkId))->onQueue('withdrawals');
+    }
+})
+    ->everyFiveMinutes()// через 5min
+    ->name('reconcile-stuck-withdrawals')
     ->withoutOverlapping()
     ->onOneServer();
 

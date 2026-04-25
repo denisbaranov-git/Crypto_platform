@@ -12,6 +12,7 @@ use App\Domain\Deposit\Services\CurrencyNetworkQueryService;
 use App\Infrastructure\Blockchain\BlockchainClientFactory;
 use App\Infrastructure\Blockchain\ReorgDetector;
 use App\Infrastructure\Blockchain\Repositories\NetworkScannerCursorRepository;
+
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentCurrency;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentCurrencyNetwork;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentNetwork;
@@ -19,7 +20,7 @@ use App\Infrastructure\Persistence\Eloquent\Models\EloquentWalletAddress;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 
-final class ScanNetworkBlocksJob implements ShouldQueue
+final class ScanNetworkBlocksJob_old implements ShouldQueue
 {
     use Queueable;
 
@@ -46,16 +47,15 @@ final class ScanNetworkBlocksJob implements ShouldQueue
         $safetyMargin = (int) ($networkConfig['safety_margin_blocks'] ?? config('blockchain.scanner.default_safety_margin_blocks', 12));
         $reorgWindow = (int) ($networkConfig['reorg_window_blocks'] ?? 50);
 
+        // Throttle: job может запускаться каждую минуту, но не всегда должна сканировать.
         if ($cursor->scanned_at && $cursor->scanned_at->diffInSeconds(now()) < $scanInterval) {
             return;
         }
 
         $client = $clientFactory->forNetwork($network->id);
-
-        // Shared chain reorg check for the entire network.
         // denis // лучше потом вынести в отдельный DetectChainReorgJob
         // 1) Проверяем reorg только по последнему зафиксированному блоку.
-        if ($reorgDetector->detectAndRewind($network->id, $client, $reorgWindow, $network->code)) {
+        if ($reorgDetector->detectAndRewind($network->id, $client, $reorgWindow)) {
             return;
         }
 
@@ -85,7 +85,7 @@ final class ScanNetworkBlocksJob implements ShouldQueue
                 $currency = EloquentCurrency::query()->where('code', $currencyCode)->first();
 
                 if (! $currency) {
-                    continue;
+                    continue; // Валюта не поддерживается.
                 }
 
                 $currencyNetwork = EloquentCurrencyNetwork::query()
@@ -104,6 +104,7 @@ final class ScanNetworkBlocksJob implements ShouldQueue
                     continue;
                 }
 
+                // 2) Регистрируем факт депозита.
                 $registerHandler->handle(new RegisterDetectedDepositCommand(
                     userId: $walletContext['user_id'],
                     networkId: $network->id,
@@ -122,6 +123,7 @@ final class ScanNetworkBlocksJob implements ShouldQueue
                     metadata: $event->metadata,
                 ));
 
+                // 3) Обновляем confirmations.
                 $updateHandler->handle(new UpdateDepositConfirmationsCommand(
                     networkId: $network->id,
                     externalKey: $event->externalKey,
@@ -140,7 +142,11 @@ final class ScanNetworkBlocksJob implements ShouldQueue
             $cursors->advance($network->id, $blockNumber, $client->blockHash($blockNumber));
         }
     }
-
+    /**
+     * Простая address lookup логика.
+     * В продакшне это можно вынести в отдельный query service,
+     * но для v1 такой подход читается легче и не плодит абстракции.
+     */
     private function resolveWalletContext(int $networkId, string $address): ?array
     {
         $walletAddress = EloquentWalletAddress::query()

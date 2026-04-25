@@ -4,23 +4,18 @@ declare(strict_types=1);
 
 //namespace App\Jobs;
 namespace App\Infrastructure\Withdrawal\Jobs;
-use App\Application\Withdrawal\Commands\HandleWithdrawalReorgCommand;
+
 use App\Application\Withdrawal\Commands\UpdateWithdrawalConfirmationsCommand;
-use App\Application\Withdrawal\Handlers\HandleWithdrawalReorgHandler;
 use App\Application\Withdrawal\Handlers\UpdateWithdrawalConfirmationsHandler;
 use App\Domain\Withdrawal\Repositories\WithdrawalRepository;
 use App\Infrastructure\Blockchain\BlockchainClientFactory;
+use App\Infrastructure\Blockchain\ReorgDetector;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentNetwork;
-use App\Infrastructure\Blockchain\Repositories\NetworkScannerCursorRepository;
+use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
-use Illuminate\Foundation\Queue\Queueable;
+use Illuminate\Support\Facades\Log;
+use Throwable;
 
-/**
- * CHANGED:
- * - polls tx status by txid;
- * - stores/updates snapshot block data;
- * - detects canonical mismatch as reorg.
- */
 final class ConfirmWithdrawalJob implements ShouldQueue
 {
     use Queueable;
@@ -34,81 +29,64 @@ final class ConfirmWithdrawalJob implements ShouldQueue
 
     public function handle(
         BlockchainClientFactory $clientFactory,
-        NetworkScannerCursorRepository $cursors,
+        ReorgDetector $reorgDetector,
         WithdrawalRepository $withdrawals,
         UpdateWithdrawalConfirmationsHandler $updateHandler,
-        HandleWithdrawalReorgHandler $reorgHandler,
     ): void {
         $network = EloquentNetwork::query()->findOrFail($this->networkId);
-        $cursor = $cursors->get($network->id);
+        $client = $clientFactory->forNetwork($network->id);
 
-        $networkConfig = config("withdrawal.scanner.networks.{$network->code}", []);
-        $scanInterval = (int) ($networkConfig['scan_interval_seconds'] ?? config('withdrawal.scanner.default_scan_interval_seconds', 30));
+        $networkConfig = config("blockchain.scanner.networks.{$network->code}", []);
+        $reorgWindow = (int) ($networkConfig['reorg_window_blocks'] ?? 50);
 
-        if ($cursor->scanned_at && $cursor->scanned_at->diffInSeconds(now()) < $scanInterval) {
+        // Shared chain reorg check.
+        if ($reorgDetector->detectAndRewind($network->id, $client, $reorgWindow, $network->code)) {
             return;
         }
 
-        $client = $clientFactory->forNetwork($network->id);
         $openWithdrawals = $withdrawals->findOpenByNetwork($network->id, 500);
 
         foreach ($openWithdrawals as $withdrawal) {
             if ($withdrawal->txid() === null) {
                 continue;
             }
-            /**
-             * $client->transaction return:
-             *
-             * final readonly class BlockchainTransactionStatus
-             * {
-             * public function __construct(
-             * public string $txid,
-             * public ?int $blockNumber,
-             * public ?string $blockHash,
-             * public int $confirmations,
-             * public bool $finalized = false,
-             * ) {}
-             */
-            $tx = $client->transaction($withdrawal->txid()->value());
 
-            if ($tx === null) {
-                if ($withdrawal->confirmedBlockNumber() !== null && $withdrawal->confirmedBlockHash() !== null) {
-                    $canonicalHash = $client->blockHash($withdrawal->confirmedBlockNumber());
+            try {
+                $tx = $client->transaction($withdrawal->txid()->value());
 
-                    if ($canonicalHash !== '' && $canonicalHash !== $withdrawal->confirmedBlockHash()) {
-                        $reorgHandler->handle(new HandleWithdrawalReorgCommand(
-                            withdrawalId: $withdrawal->id()->value(),
-                            reason: 'canonical_block_hash_mismatch',
-                            metadata: [
-                                'source' => 'confirm_withdrawal_job',
-                                'network_code' => $network->code,
-                            ]
-                        ));
-
-                    }
+                // tx can be temporarily unavailable - this is not a reorg by itself.
+                if ($tx === null) {
+                    continue;
                 }
 
-                continue;
-            }
-
-            $updateHandler->handle(new UpdateWithdrawalConfirmationsCommand(
-                withdrawalId: $withdrawal->id()->value(),
-                networkId: $network->id,
-                currencyNetworkId: $withdrawal->currencyNetworkId(),
-                txid: $withdrawal->txid()->value(),
-                confirmations: $tx->confirmations,
-                blockHash: $tx->blockHash,
-                blockNumber: $tx->blockNumber,
-                finalized: $tx->finalized,
-                metadata: [
-                    'source' => 'confirm_withdrawal_job',
+                $updateHandler->handle(new UpdateWithdrawalConfirmationsCommand(
+                    withdrawalId: $withdrawal->id()->value(),
+                    networkId: $network->id,
+                    currencyNetworkId: $withdrawal->currencyNetworkId(),
+                    txid: $withdrawal->txid()->value(),
+                    confirmations: $tx->confirmations,
+                    blockHash: $tx->blockHash,
+                    blockNumber: $tx->blockNumber,
+                    finalized: $tx->finalized,
+                    metadata: [
+                        'source' => 'confirm_withdrawal_job',
+                        'network_code' => $network->code,
+                    ],
+                    actualFeeAmount: $tx->actualFeeAmount,
+                    feeCurrencyCode: $tx->feeCurrencyCode,
+                ));
+            } catch (Throwable $e) {
+                Log::channel('ops')->warning('ConfirmWithdrawalJob failed while polling tx', [
+                    'network_id' => $network->id,
                     'network_code' => $network->code,
-                ],
-            ));
-        }
+                    'withdrawal_id' => $withdrawal->id()?->value(),
+                    'txid' => $withdrawal->txid()?->value(),
+                    'exception' => $e::class,
+                    'error' => $e->getMessage(),
+                ]);
 
-        $cursors->touch($network->id, [
-            'scanned_at' => now(),
-        ]);
+                throw $e;
+            }
+        }
     }
 }

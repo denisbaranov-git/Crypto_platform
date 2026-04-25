@@ -64,9 +64,12 @@ return new class extends Migration
 
             $table->text('last_error')->nullable();
 
-            $table->unsignedBigInteger('confirmed_block_number')->nullable();
-            $table->string('confirmed_block_hash', 255)->nullable();
-            $table->unsignedInteger('confirmed_confirmations')->nullable();
+//            $table->unsignedBigInteger('confirmed_block_number')->nullable();
+//            $table->string('confirmed_block_hash', 255)->nullable();
+//            $table->unsignedInteger('confirmed_confirmations')->nullable();
+            $table->unsignedBigInteger('block_number')->nullable();
+            $table->string('block_hash', 255)->nullable();
+            $table->unsignedInteger('confirmations')->nullable();
 
             $table->unsignedBigInteger('reorg_block_number')->nullable();
             $table->unsignedInteger('reversal_attempts')->default(0);

@@ -4,6 +4,7 @@ return [
 
     'scanner' => [
         'default_safety_margin_blocks' => 12,
+        'default_scan_interval_seconds' => 30,
 
         'networks' => [
             'ethereum' => [
