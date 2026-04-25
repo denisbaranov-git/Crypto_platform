@@ -70,9 +70,10 @@ final class EloquentWithdrawalRepository implements WithdrawalRepository
     {
         $rows = EloquentWithdrawal::query()
             ->where('network_id', $networkId)
-            ->whereNotNull('confirmed_block_number') // едесь не корректное название нужно -block_number //denis
-            ->whereBetween('confirmed_block_number', [$rewindTo, $oldLastProcessedBlock])
-            ->orderBy('confirmed_block_number')
+            ->whereNotNull('block_number')
+            ->whereBetween('block_number', [$rewindTo, $oldLastProcessedBlock])
+            ->whereIn('status', ['broadcasted', 'settled', 'confirmed', 'reorged'])
+            ->orderBy('block_number')
             ->orderBy('id')
             ->get();
 

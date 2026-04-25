@@ -118,8 +118,10 @@ final class ReorgDetector
                             'network_code' => $networkCode,
                             'rewind_to_block' => $rewindTo,
                             'old_last_processed_block' => $oldLastProcessedBlock,
-                            'confirmed_block_number' => $withdrawal->confirmedBlockNumber(),
-                            'confirmed_block_hash' => $withdrawal->confirmedBlockHash(),
+//                            'confirmed_block_number' => $withdrawal->confirmedBlockNumber(),
+//                            'confirmed_block_hash' => $withdrawal->confirmedBlockHash(),
+                            'block_number' => $withdrawal->blockNumber(),
+                            'block_hash' => $withdrawal->blockHash(),
                         ]
                     )
                 );

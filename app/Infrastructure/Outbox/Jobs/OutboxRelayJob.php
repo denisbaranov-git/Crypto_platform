@@ -10,10 +10,8 @@ use App\Application\Deposit\Handlers\CreditDepositHandler;
 use App\Application\Deposit\Handlers\ReverseDepositCreditHandler;
 use App\Application\Withdrawal\Commands\BroadcastWithdrawalCommand;
 use App\Application\Withdrawal\Commands\ConsumeWithdrawalHoldCommand;
-use App\Application\Withdrawal\Commands\DebitWithdrawalCommand;
 use App\Application\Withdrawal\Handlers\BroadcastWithdrawalHandler;
 use App\Application\Withdrawal\Handlers\ConsumeWithdrawalHoldHandler;
-use App\Application\Withdrawal\Handlers\DebitWithdrawalHandler;
 use App\Domain\Deposit\Events\DepositConfirmed;
 use App\Domain\Deposit\Events\DepositReorged;
 use App\Domain\Shared\Outbox\OutboxRepository;
@@ -87,6 +85,7 @@ final class OutboxRelayJob implements ShouldQueue
                 }
 
                 $outbox->markDispatched($message->idempotency_key);
+
             } catch (Throwable $e) {
                 if ($this->isPermanentFailure($e)) {
                     $outbox->markTerminalFailure(

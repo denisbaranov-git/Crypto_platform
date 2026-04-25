@@ -34,12 +34,12 @@ final class UpdateWithdrawalConfirmationsHandler_old
 
             // Reorg detection if we already had a confirmed snapshot and current block hash differs.
             if (
-                $withdrawal->confirmedBlockNumber() !== null &&
-                $withdrawal->confirmedBlockHash() !== null &&
+                $withdrawal->blockNumber() !== null &&
+                $withdrawal->blockHash() !== null &&
                 $command->blockNumber !== null &&
                 $command->blockHash !== null &&
-                $withdrawal->confirmedBlockNumber() === $command->blockNumber &&
-                $withdrawal->confirmedBlockHash() !== $command->blockHash
+                $withdrawal->blockNumber() === $command->blockNumber &&
+                $withdrawal->blockHash() !== $command->blockHash
             ) {
                 /**
                  * withdrawal становится reorged
@@ -53,7 +53,8 @@ final class UpdateWithdrawalConfirmationsHandler_old
                  */
                 $withdrawal->markReorged(
                     reason: 'canonical_block_hash_mismatch',
-                    reorgBlockNumber: $withdrawal->confirmedBlockNumber()
+                    //reorgBlockNumber: $withdrawal->confirmedBlockNumber()
+                    reorgBlockNumber: $withdrawal->blockNumber()
                 );
                 $this->withdrawals->save($withdrawal);
 

@@ -43,7 +43,7 @@ final class ConfirmWithdrawalJob_old implements ShouldQueue
         $cursor = $cursors->get($network->id);
 
         $networkConfig = config("blockchain.scanner.networks.{$network->code}", []);
-        $scanInterval = (int) ($networkConfig['scan_interval_seconds'] ?? config('withdrawal.scanner.default_scan_interval_seconds', 30));
+        $scanInterval = (int) ($networkConfig['scan_interval_seconds'] ?? config('blockchain.scanner.default_scan_interval_seconds', 30));
 
         if ($cursor->scanned_at && $cursor->scanned_at->diffInSeconds(now()) < $scanInterval) {
             return;

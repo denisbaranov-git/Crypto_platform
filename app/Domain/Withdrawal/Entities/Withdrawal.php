@@ -56,9 +56,12 @@ final class Withdrawal
         private ?string $cancellationReason,
         private ?string $rejectionReason,
         private ?string $lastError,
-        private ?int $confirmedBlockNumber,
-        private ?string $confirmedBlockHash,
-        private ?int $confirmedConfirmations,
+//        private ?int $confirmedBlockNumber,
+//        private ?string $confirmedBlockHash,
+//        private ?int $confirmedConfirmations,
+        private ?int $blockNumber,
+        private ?string $blockHash,
+        private ?int $confirmations,
         private ?string $reorgedAt,
         private ?string $reversedAt,
         private ?string $reorgReason,
@@ -127,9 +130,9 @@ final class Withdrawal
             cancellationReason: null,
             rejectionReason: null,
             lastError: null,
-            confirmedBlockNumber: null,
-            confirmedBlockHash: null,
-            confirmedConfirmations: null,
+            blockNumber: null,
+            blockHash: null,
+            confirmations: null,
             reorgedAt: null,
             reversedAt: null,
             reorgReason: null,
@@ -184,9 +187,9 @@ final class Withdrawal
             cancellationReason: $row['cancellation_reason'] ?? null,
             rejectionReason: $row['rejection_reason'] ?? null,
             lastError: $row['last_error'] ?? null,
-            confirmedBlockNumber: $row['confirmed_block_number'] !== null ? (int) $row['confirmed_block_number'] : null,
-            confirmedBlockHash: $row['confirmed_block_hash'] ?? null,
-            confirmedConfirmations: $row['confirmed_confirmations'] !== null ? (int) $row['confirmed_confirmations'] : null,
+            blockNumber: $row['block_number'] !== null ? (int) $row['block_number'] : null,
+            blockHash: $row['block_hash'] ?? null,
+            confirmations: $row['confirmations'] !== null ? (int) $row['confirmations'] : null,
             reorgedAt: $row['reorged_at'] ?? null,
             reversedAt: $row['reversed_at'] ?? null,
             reorgReason: $row['reorg_reason'] ?? null,
@@ -238,9 +241,12 @@ final class Withdrawal
     public function cancellationReason(): ?string { return $this->cancellationReason; }
     public function rejectionReason(): ?string { return $this->rejectionReason; }
     public function lastError(): ?string { return $this->lastError; }
-    public function confirmedBlockNumber(): ?int { return $this->confirmedBlockNumber; }
-    public function confirmedBlockHash(): ?string { return $this->confirmedBlockHash; }
-    public function confirmedConfirmations(): ?int { return $this->confirmedConfirmations; }
+//    public function confirmedBlockNumber(): ?int { return $this->blockNumber; }
+//    public function confirmedBlockHash(): ?string { return $this->blockHash; }
+//    public function confirmedConfirmations(): ?int { return $this->confirmations; }
+    public function blockNumber(): ?int { return $this->blockNumber; }
+    public function blockHash(): ?string { return $this->blockHash; }
+    public function confirmations(): ?int { return $this->confirmations; }
     public function reorgedAt(): ?string { return $this->reorgedAt; }
     public function reversedAt(): ?string { return $this->reversedAt; }
     public function reorgReason(): ?string { return $this->reorgReason; }
@@ -310,9 +316,9 @@ final class Withdrawal
             throw new DomainException('Only broadcasted/settled withdrawal can be confirmed.');
         }
 
-        $this->confirmedConfirmations = $confirmations;
-        $this->confirmedBlockNumber = $blockNumber;
-        $this->confirmedBlockHash = $blockHash;
+        $this->confirmations = $confirmations;
+        $this->blockNumber = $blockNumber;
+        $this->blockHash = $blockHash;
         $this->confirmedAt = now()->toDateTimeString();
         $this->status = new WithdrawalStatus('confirmed');
         $this->version++;
@@ -368,26 +374,26 @@ final class Withdrawal
         $this->networkFeePostedAt = now()->toDateTimeString();
         $this->version++;
     }
-    public function setConfirmedSnapshot(
+    public function setConfirmSnapshot(
         int $blockNumber,
         string $blockHash,
         int $confirmations
     ): void {
         if ($blockNumber <= 0) {
-            throw new DomainException('Confirmed block number must be greater than zero.');
+            throw new DomainException('Block number must be greater than zero.');
         }
 
         if ($blockHash === '') {
-            throw new DomainException('Confirmed block hash cannot be empty.');
+            throw new DomainException('Block hash cannot be empty.');
         }
 
         if ($confirmations < 0) {
             throw new DomainException('Confirmations cannot be negative.');
         }
 
-        $this->confirmedBlockNumber = $blockNumber;
-        $this->confirmedBlockHash = $blockHash;
-        $this->confirmedConfirmations = $confirmations;
+        $this->blockNumber = $blockNumber;
+        $this->blockHash = $blockHash;
+        $this->confirmations = $confirmations;
     }
     public function recordLastError(string $message): void
     {
