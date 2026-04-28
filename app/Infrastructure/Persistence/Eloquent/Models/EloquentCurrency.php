@@ -6,5 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 
 class EloquentCurrency extends Model
 {
+    protected $table = 'currencies';
     //
 }

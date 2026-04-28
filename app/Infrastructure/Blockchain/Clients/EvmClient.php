@@ -93,7 +93,11 @@ final class EvmClient implements BlockchainClient
             $tokenContracts
         )));
 
+echo '$hexBlock = '.$hexBlock;
+echo ' transfer_signature = ' . config('blockchain.evm.transfer_signature');
+ var_dump( $contractAddresses);
         if (! empty($contractAddresses)) {
+            //eth_getLogs - Credit pricing is 255 credits!!!!
             $logs = (array) $this->rpc->call('eth_getLogs', [[
                 'fromBlock' => $hexBlock,
                 'toBlock'   => $hexBlock,
@@ -102,7 +106,8 @@ final class EvmClient implements BlockchainClient
                     config('blockchain.evm.transfer_signature'),
                 ],
             ]]);
-
+echo '$this->rpc->call(eth_getLogs = ';
+var_dump( $logs);
             foreach ($logs as $log) {
                 $contractAddress = strtolower((string) ($log['address'] ?? ''));
                 $txid = (string) ($log['transactionHash'] ?? '');
@@ -282,6 +287,7 @@ final class EvmClient implements BlockchainClient
     private function estimateGas(string $from, string $to, string $data, string $value): int
     {
         try {
+            //eth_estimateGas Credit pricing is 300 credits per day!!!
             $hex = $this->rpc->call('eth_estimateGas', [[
                 'from' => $from,
                 'to' => $to,

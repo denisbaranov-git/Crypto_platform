@@ -38,7 +38,9 @@ final class ScanNetworkBlocksJob implements ShouldQueue
         RegisterDetectedDepositHandler $registerHandler,
         UpdateDepositConfirmationsHandler $updateHandler,
     ): void {
+
         $network = EloquentNetwork::query()->findOrFail($this->networkId);
+
         $cursor = $cursors->get($this->networkId);
 
         $networkConfig = config("blockchain.scanner.networks.{$network->code}", []);
@@ -49,7 +51,6 @@ final class ScanNetworkBlocksJob implements ShouldQueue
         if ($cursor->scanned_at && $cursor->scanned_at->diffInSeconds(now()) < $scanInterval) {
             return;
         }
-
         $client = $clientFactory->forNetwork($network->id);
 
         // Shared chain reorg check for the entire network.
@@ -60,6 +61,7 @@ final class ScanNetworkBlocksJob implements ShouldQueue
         }
 
         $head = $client->headBlock();
+
         $safeHead = max(0, $head - $safetyMargin);
 
         if ($cursor->last_processed_block >= $safeHead) {

@@ -22,17 +22,20 @@ final class BlockchainClientFactory
 
         return match ($network->rpc_driver) {
             'evm' => new EvmClient(
-                rpc: new JsonRpcClient($network->rpc_url, null),
+                //rpc: new JsonRpcClient($network->rpc_url, null /*config('blockchain.api.ethereum.api_key')*/), //denis //нужно хранить в зашиырованном виде в бд
+                rpc: new JsonRpcClient(config('blockchain.api.ethereum.rpc_url'), null),// tmp
                 networkId: $networkId,
                 secrets: $this->secrets,
             ),
             'tron' => new TronClient(
-                rpcUrl: $network->rpc_url,
+                //rpcUrl: $network->rpc_url,
+                rpcUrl: config('blockchain.api.tron.rpc_url'),
                 networkId: $networkId,
                 secrets: $this->secrets,
             ),
             'bitcoin' => new BitcoinClient(
-                rpc: new JsonRpcClient($network->rpc_url, null),
+                //rpc: new JsonRpcClient($network->rpc_url, null),// tmp
+                rpc: new JsonRpcClient(config('blockchain.api.bitcoin.rpc_url'), null), //denis //нужно хранить в зашиырованном виде в бд
                 networkId: $networkId,
                 secrets: $this->secrets,
             ),

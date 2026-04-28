@@ -9,6 +9,8 @@ use App\Domain\Shared\Outbox\OutboxRepository;
 use App\Infrastructure\Deposit\Services\EloquentConfirmationRequirementResolver;
 use App\Infrastructure\Deposit\Services\EloquentCurrencyNetworkQueryService;
 use App\Infrastructure\Persistence\Eloquent\Deposit\Repositories\EloquentDepositRepository;
+use App\Infrastructure\Persistence\Eloquent\Deposit\Repositories\EloquentDepositUniquenessChecker;
+use App\Infrastructure\Persistence\Eloquent\Mappers\DepositMapper;
 use App\Infrastructure\Persistence\Eloquent\Repositories\EloquentOutboxRepository;
 use Illuminate\Support\ServiceProvider;
 
@@ -16,6 +18,13 @@ final class DepositServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
+        $this->app->bind(DepositRepository::class, function ($app) {
+
+            return new EloquentDepositRepository($app->make(DepositMapper::class));
+        });
+//        $this->app->bind(DepositUniquenessChecker::class, function ($app) {
+//            return new EloquentDepositUniquenessChecker();
+//        });
         $this->app->bind(DepositRepository::class, EloquentDepositRepository::class);
         $this->app->bind(ConfirmationRequirementResolver::class, EloquentConfirmationRequirementResolver::class);
         $this->app->bind(OutboxRepository::class, EloquentOutboxRepository::class);

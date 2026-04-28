@@ -51,13 +51,13 @@ class AppServiceProvider extends ServiceProvider
             return new EloquentConfirmationRequirementResolver();
         });
 
-        $this->app->bind(DepositRepository::class, function ($app) {
-
-            return new EloquentDepositRepository($app->make(DepositMapper::class));
-        });
-        $this->app->bind(DepositUniquenessChecker::class, function ($app) {
-            return new EloquentDepositUniquenessChecker();
-        });
+//        $this->app->bind(DepositRepository::class, function ($app) {
+//
+//            return new EloquentDepositRepository($app->make(DepositMapper::class));
+//        });
+//        $this->app->bind(DepositUniquenessChecker::class, function ($app) {
+//            return new EloquentDepositUniquenessChecker();
+//        });
     }
 
     /**

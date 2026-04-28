@@ -2,7 +2,7 @@
 
 namespace App\Console\Commands;
 
-use App\Services\Wallet\AddressGeneratorInterface;
+use App\Services\Wallet\AddressGeneratorInterfaceOld;
 use App\Services\Wallet\SystemWalletService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Crypt;
@@ -12,15 +12,28 @@ class InitSystemWallet extends Command
     //protected $signature = 'hd-wallet:init-hot {network}';
     protected $signature = 'hd-wallet:init-hot';
     protected $description = 'Initialize Hot Wallet for a network';
+
     /**
      * Execute the console command.
      */
-    private array $networks = [ 'ethereum' => 1, 'tron' => 2 ,'bsc' => 3,'polygon' => 4 ];
+
+    /**
+     * 1,Ethereum,           ethereum
+     * 2,Tron,               tron
+     * 3,Bitcoin,            bitcoin
+     * 4,Ethereum Sepolia,   ethereum_sepolia
+     * 5,Arbitrum Sepolia,   arbitrum_sepolia
+     * 6,Base Sepolia,       base_sepolia
+     * 7,Polygon Amoy,       polygon_amoy
+     * 8,Tron Nile,          tron_nile
+     * 9,Bitcoin Testnet,    bitcoin_testnet
+ */
+    private array $networks = [ 'ethereum' => 1, 'tron' => 2 ,'bitcoin' => 3,'ethereum_sepolia' => 4, 'arbitrum_sepolia' => 5, 'base_sepolia' => 6, 'polygon_amoy' => 7, 'tron_nile' => 8, 'bitcoin_testnet' => 9];
     private array $system_wallet_types = [ 'hot', 'cold'];
-    protected AddressGeneratorInterface $addressGenerator;
+    protected AddressGeneratorInterfaceOld $addressGenerator;
     protected SystemWalletService  $systemWalletService;
 
-    public function __construct( AddressGeneratorInterface $addressGenerator, SystemWalletService $systemWalletService )
+    public function __construct(AddressGeneratorInterfaceOld $addressGenerator, SystemWalletService $systemWalletService )
     {
         parent::__construct();
         $this->addressGenerator = $addressGenerator;
@@ -64,7 +77,7 @@ class InitSystemWallet extends Command
 
                 $this->updateEnvFile(strtoupper($network).'_'.strtoupper($walletType).'_ADDRESS', $address);
 
-                $this->systemWalletService->createWallet( $network_id, $network, $walletType );//denis нужно передавать только ( $network_id, $walletType )
+                $this->systemWalletService->createWallet( $network_id, $network, $walletType );//denis //нужно передавать только ( $network_id, $walletType )
 
                 $this->info(strtoupper($walletType). " Wallet for {$network} initialized!");
                 $this->line( strtoupper($walletType)." Address: {$address}");

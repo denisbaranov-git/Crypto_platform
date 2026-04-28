@@ -35,7 +35,8 @@ class CreateMasterMnemonic extends Command
             }
 
         $random = new Random();
-        $entropy = $random->bytes(Bip39Mnemonic::MAX_ENTROPY_BYTE_LEN);
+        //$entropy = $random->bytes(Bip39Mnemonic::MAX_ENTROPY_BYTE_LEN);
+        $entropy = $random->bytes(32);
 
         $bip39 = MnemonicFactory::bip39();
         $mnemonic = $bip39->entropyToMnemonic($entropy);

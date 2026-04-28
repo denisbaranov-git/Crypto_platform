@@ -1,14 +1,22 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services\Wallet\Generators;
 
-use App\Contracts\AddressGeneratorInterface;
 use Elliptic\EC;
 use StephenHill\Base58;
-use kornrunner\Keccak; // Не используется, но оставляем для совместимости с интерфейсом
 
-class BitcoinAddressGenerator implements AddressGeneratorInterface
+class BitcoinAddressGenerator
 {
+    // Типы адресов
+    public const ADDRESS_TYPE_LEGACY = 'legacy';  // P2PKH (начинается с 1)
+    public const ADDRESS_TYPE_SEGWIT = 'segwit';  // P2SH-P2WPKH (начинается с 3)
+    public const ADDRESS_TYPE_NATIVE = 'native';  // Bech32 (начинается с bc1)
+
+    private EC $ec;
+    private Base58 $base58;
+
     public function __construct()
     {
         $this->ec = new EC('secp256k1');
@@ -18,54 +26,78 @@ class BitcoinAddressGenerator implements AddressGeneratorInterface
     /**
      * Генерирует новую пару ключей и возвращает адрес и приватный ключ
      *
-     * @param array $options Дополнительные параметры (type, testnet, compressed)
-     * @return array ['private_key' => string, 'address' => string]
+     * @param array $options Дополнительные параметры:
+     *   - type: 'legacy' | 'segwit' | 'native' (default: 'legacy')
+     *   - testnet: bool (default: false)
+     *   - compressed: bool (default: true)
+     * @return array ['private_key' => string, 'address' => string, 'public_key' => string, 'wif' => string]
      */
     public function generate(array $options = []): array
     {
-        // 1. Генерируем приватный ключ (256 бит)
+        // 1. Генерируем приватный ключ (64 hex символа = 32 байта)
         $privateKey = $this->generatePrivateKey();
 
-        // 2. Получаем публичный ключ
+        // 2. Получаем публичный ключ из приватного
         $keyPair = $this->ec->keyFromPrivate($privateKey);
-        $publicKey = $keyPair->getPublic()->encode('hex', false); // uncompressed
 
-        // 3. Определяем тип адреса
+        // 3. Определяем параметры
         $addressType = $options['type'] ?? self::ADDRESS_TYPE_LEGACY;
         $testnet = $options['testnet'] ?? false;
-        $compressed = $options['compressed'] ?? true; // Bitcoin обычно использует сжатые ключи
+        $compressed = $options['compressed'] ?? true;
 
-        // 4. Генерируем адрес в зависимости от типа
+        // 4. Получаем публичный ключ в нужном формате
+        if ($compressed) {
+            $publicKey = $keyPair->getPublic()->encode('hex', true);
+        } else {
+            $publicKey = $keyPair->getPublic()->encode('hex', false);
+        }
+
+        // 5. Генерируем адрес в зависимости от типа
         $address = match($addressType) {
-            self::ADDRESS_TYPE_LEGACY => $this->generateP2PKHAddress($publicKey, $compressed, $testnet),
-            self::ADDRESS_TYPE_SEGWIT => $this->generateP2SHAddress($publicKey, $compressed, $testnet),
-            self::ADDRESS_TYPE_NATIVE => $this->generateBech32Address($publicKey, $compressed, $testnet),
-            default => $this->generateP2PKHAddress($publicKey, $compressed, $testnet)
+            self::ADDRESS_TYPE_LEGACY => $this->generateP2PKHAddress($publicKey, $testnet),
+            self::ADDRESS_TYPE_SEGWIT => $this->generateP2SHAddress($publicKey, $testnet),
+            self::ADDRESS_TYPE_NATIVE => $this->generateBech32Address($publicKey, $testnet),
+            default => throw new \InvalidArgumentException("Unknown address type: {$addressType}")
         };
 
-        // 5. Генерируем WIF (Wallet Import Format) для приватного ключа
+        // 6. Генерируем WIF (Wallet Import Format) для приватного ключа
         $wif = $this->privateKeyToWIF($privateKey, $compressed, $testnet);
 
         return [
-            'private_key' => $privateKey,      // hex-формат для совместимости с интерфейсом
-            'wif' => $wif,                      // Bitcoin-формат
-            'address' => $address,
-            'public_key' => $publicKey,
-            'type' => $addressType
+            'private_key' => $privateKey,
+            'public_key'  => $publicKey,
+            'address'     => $address,
+            'wif'         => $wif,
+            'type'        => $addressType,
+            'testnet'     => $testnet,
         ];
     }
 
     /**
-     * Восстанавливает адрес из приватного ключа
+     * Восстановить адрес из приватного ключа
      */
-    public function addressFromPrivateKey(string $privateKey): string
+    public function addressFromPrivateKey(string $privateKey, array $options = []): string
     {
-        // Этот метод нужен для интерфейса, но в Bitcoin лучше использовать generate с опциями
-        return $this->generate(['private_key' => $privateKey])['address'];
+        $keyPair = $this->ec->keyFromPrivate($privateKey);
+
+        $compressed = $options['compressed'] ?? true;
+        $testnet = $options['testnet'] ?? false;
+        $addressType = $options['type'] ?? self::ADDRESS_TYPE_LEGACY;
+
+        $publicKey = $compressed
+            ? $keyPair->getPublic()->encode('hex', true)
+            : $keyPair->getPublic()->encode('hex', false);
+
+        return match($addressType) {
+            self::ADDRESS_TYPE_LEGACY => $this->generateP2PKHAddress($publicKey, $testnet),
+            self::ADDRESS_TYPE_SEGWIT => $this->generateP2SHAddress($publicKey, $testnet),
+            self::ADDRESS_TYPE_NATIVE => $this->generateBech32Address($publicKey, $testnet),
+            default => throw new \InvalidArgumentException("Unknown address type: {$addressType}")
+        };
     }
 
     /**
-     * Генерация приватного ключа (64 hex символа)
+     * Генерация приватного ключа (64 hex символа = 32 байта)
      */
     private function generatePrivateKey(): string
     {
@@ -73,9 +105,9 @@ class BitcoinAddressGenerator implements AddressGeneratorInterface
     }
 
     /**
-     * Генерация P2PKH адреса (Legacy, начинается с 1)
+     * Генерация P2PKH адреса (Legacy, начинается с 1 на mainnet, m/n на testnet)
      */
-    private function generateP2PKHAddress(string $publicKey, bool $compressed, bool $testnet): string
+    private function generateP2PKHAddress(string $publicKey, bool $testnet): string
     {
         // 1. SHA-256 хеш публичного ключа
         $sha256 = hash('sha256', hex2bin($publicKey), true);
@@ -85,72 +117,88 @@ class BitcoinAddressGenerator implements AddressGeneratorInterface
 
         // 3. Добавляем версию (0x00 для mainnet, 0x6f для testnet)
         $networkByte = $testnet ? "\x6f" : "\x00";
-        $withVersion = $networkByte . $ripeMd160;
+        $versionedPayload = $networkByte . $ripeMd160;
 
         // 4. Двойной SHA-256 для контрольной суммы
-        $checksum = $this->doubleSha256($withVersion);
+        $checksum = $this->doubleSha256($versionedPayload);
 
         // 5. Добавляем первые 4 байта контрольной суммы
-        $binaryAddress = $withVersion . substr($checksum, 0, 4);
+        $binaryAddress = $versionedPayload . substr($checksum, 0, 4);
 
         // 6. Кодируем в Base58
         return $this->base58->encode($binaryAddress);
     }
 
     /**
-     * Генерация P2SH адреса (SegWit, начинается с 3)
+     * Генерация P2SH-P2WPKH адреса (SegWit wrapped, начинается с 3 на mainnet, 2 на testnet)
      */
-    private function generateP2SHAddress(string $publicKey, bool $compressed, bool $testnet): string
+    private function generateP2SHAddress(string $publicKey, bool $testnet): string
     {
-        // Для P2SH мы создаём redeem script: OP_0 <20-byte-hash>
+        // Для сжатого публичного ключа
+        $compressedPubKey = hex2bin($publicKey);
+        if (strlen($compressedPubKey) === 65) {
+            // Если ключ не сжатый, сжимаем его
+            $prefix = $compressedPubKey[64] % 2 === 0 ? "\x02" : "\x03";
+            $compressedPubKey = $prefix . substr($compressedPubKey, 1, 32);
+        }
 
-        // 1. Получаем хеш публичного ключа (как в P2PKH)
-        $sha256 = hash('sha256', hex2bin($publicKey), true);
+        // 1. SHA-256 публичного ключа
+        $sha256 = hash('sha256', $compressedPubKey, true);
+
+        // 2. RIPEMD-160 для получения HASH160
         $pubKeyHash = hash('ripemd160', $sha256, true);
 
-        // 2. Создаём redeem script: 0x0014 + pubKeyHash
-        $redeemScript = "\x00\x14" . $pubKeyHash;
+        // 3. Создаем witness program: 0x00 0x14 <20-byte-pubkey-hash>
+        $witnessProgram = "\x00\x14" . $pubKeyHash;
 
-        // 3. SHA-256 redeem script
-        $scriptHash = hash('sha256', $redeemScript, true);
+        // 4. SHA-256 witness program
+        $scriptHash = hash('sha256', $witnessProgram, true);
 
-        // 4. RIPEMD-160
+        // 5. RIPEMD-160
         $scriptHash160 = hash('ripemd160', $scriptHash, true);
 
-        // 5. Добавляем версию (0x05 для mainnet, 0xc4 для testnet)
+        // 6. Добавляем версию (0x05 для mainnet, 0xc4 для testnet)
         $networkByte = $testnet ? "\xc4" : "\x05";
-        $withVersion = $networkByte . $scriptHash160;
+        $versionedPayload = $networkByte . $scriptHash160;
 
-        // 6. Двойной SHA-256 для контрольной суммы
-        $checksum = $this->doubleSha256($withVersion);
+        // 7. Двойной SHA-256 для контрольной суммы
+        $checksum = $this->doubleSha256($versionedPayload);
 
-        // 7. Добавляем контрольную сумму и кодируем в Base58
-        $binaryAddress = $withVersion . substr($checksum, 0, 4);
+        // 8. Добавляем контрольную сумму и кодируем в Base58
+        $binaryAddress = $versionedPayload . substr($checksum, 0, 4);
+
         return $this->base58->encode($binaryAddress);
     }
 
     /**
-     * Генерация Bech32 адреса (Native SegWit, начинается с bc1)
+     * Генерация Bech32 адреса (Native SegWit, начинается с bc1 на mainnet, tb1 на testnet)
      */
-    private function generateBech32Address(string $publicKey, bool $compressed, bool $testnet): string
+    private function generateBech32Address(string $publicKey, bool $testnet): string
     {
-        // Bech32 адреса используют witness program
+        // Используем сжатый публичный ключ
+        $compressedPubKey = hex2bin($publicKey);
+        if (strlen($compressedPubKey) === 65) {
+            $prefix = $compressedPubKey[64] % 2 === 0 ? "\x02" : "\x03";
+            $compressedPubKey = $prefix . substr($compressedPubKey, 1, 32);
+        }
 
-        // 1. Получаем хеш публичного ключа (20 байт)
-        $sha256 = hash('sha256', hex2bin($publicKey), true);
+        // 1. SHA-256 публичного ключа
+        $sha256 = hash('sha256', $compressedPubKey, true);
+
+        // 2. RIPEMD-160 для получения HASH160
         $pubKeyHash = hash('ripemd160', $sha256, true);
 
-        // 2. Witness program: версия 0 (0x00) + 20 байт хеша
+        // 3. Создаем witness program: версия 0 (0x00) + 20 байт хеша
         $witnessProgram = "\x00" . $pubKeyHash;
 
-        // 3. Конвертируем 8-битные байты в 5-битные слова для Bech32
-        $fiveBitData = $this->convertBits($witnessProgram, 8, 5, true);
+        // 4. Конвертируем из 8-битных байт в 5-битные слова
+        $fiveBitWords = $this->convertBits($witnessProgram, 8, 5, true);
 
-        // 4. HRP (Human Readable Part): bc для mainnet, tb для testnet
+        // 5. HRP (Human Readable Part)
         $hrp = $testnet ? 'tb' : 'bc';
 
-        // 5. Создаём Bech32 адрес
-        return $this->encodeBech32($hrp, $fiveBitData);
+        // 6. Кодируем в Bech32
+        return $this->encodeBech32($hrp, $fiveBitWords);
     }
 
     /**
@@ -160,21 +208,23 @@ class BitcoinAddressGenerator implements AddressGeneratorInterface
     {
         // 1. Добавляем версию (0x80 для mainnet, 0xef для testnet)
         $networkByte = $testnet ? "\xef" : "\x80";
+
+        // 2. Приватный ключ в бинарном виде (32 байта)
         $keyBytes = hex2bin($privateKey);
 
-        // 2. Добавляем суффикс для сжатых ключей
+        // 3. Добавляем суффикс 0x01 для сжатых ключей
         $suffix = $compressed ? "\x01" : '';
 
-        // 3. Собираем данные для хеширования
+        // 4. Собираем данные: версия + ключ + суффикс
         $data = $networkByte . $keyBytes . $suffix;
 
-        // 4. Двойной SHA-256 для контрольной суммы
+        // 5. Двойной SHA-256 для контрольной суммы
         $checksum = $this->doubleSha256($data);
 
-        // 5. Добавляем первые 4 байта контрольной суммы
+        // 6. Добавляем первые 4 байта контрольной суммы
         $wifBinary = $data . substr($checksum, 0, 4);
 
-        // 6. Кодируем в Base58
+        // 7. Кодируем в Base58
         return $this->base58->encode($wifBinary);
     }
 
@@ -196,14 +246,21 @@ class BitcoinAddressGenerator implements AddressGeneratorInterface
         $bits = 0;
         $ret = [];
         $maxv = (1 << $toBits) - 1;
+        $maxAcc = (1 << ($fromBits + $toBits - 1)) - 1;
 
-        for ($i = 0; $i < strlen($data); $i++) {
+        $dataArray = str_split($data);
+        $dataLen = count($dataArray);
+
+        for ($i = 0; $i < $dataLen; $i++) {
             $value = ord($data[$i]);
-            if ($value < 0 || $value >> $fromBits != 0) {
-                throw new \Exception('Invalid byte value');
+
+            if ($value >> $fromBits !== 0) {
+                throw new \InvalidArgumentException('Invalid value: exceeds fromBits');
             }
-            $acc = ($acc << $fromBits) | $value;
+
+            $acc = (($acc << $fromBits) | $value) & $maxAcc;
             $bits += $fromBits;
+
             while ($bits >= $toBits) {
                 $bits -= $toBits;
                 $ret[] = ($acc >> $bits) & $maxv;
@@ -211,11 +268,11 @@ class BitcoinAddressGenerator implements AddressGeneratorInterface
         }
 
         if ($pad) {
-            if ($bits) {
+            if ($bits > 0) {
                 $ret[] = ($acc << ($toBits - $bits)) & $maxv;
             }
-        } else if ($bits >= $fromBits || ((($acc << ($toBits - $bits)) & $maxv) != 0)) {
-            throw new \Exception('Invalid padding');
+        } elseif ($bits >= $fromBits || ((($acc << ($toBits - $bits)) & $maxv) !== 0)) {
+            throw new \InvalidArgumentException('Invalid padding');
         }
 
         return $ret;
@@ -226,42 +283,53 @@ class BitcoinAddressGenerator implements AddressGeneratorInterface
      */
     private function encodeBech32(string $hrp, array $data): string
     {
-        // Bech32 charset
         $charset = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
-
-        // Константы для полинома
         $generator = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
 
-        // Функция для вычисления полинома
-        $polyMod = function($values) use ($generator) {
-            $chk = 1;
-            foreach ($values as $value) {
-                $top = $chk >> 25;
-                $chk = (($chk & 0x1ffffff) << 5) ^ $value;
-                for ($i = 0; $i < 5; $i++) {
-                    if (($top >> $i) & 1) {
-                        $chk ^= $generator[$i];
-                    }
-                }
-            }
-            return $chk;
-        };
+        // Расширяем HRP
+        $hrpExpanded = $this->hrpExpand($hrp);
 
-        // Добавляем контрольную сумму
-        $values = array_merge($data, [0, 0, 0, 0, 0, 0]);
-        $polymod = $polyMod(array_merge($this->hrpExpand($hrp), $values)) ^ 1;
+        // Объединяем HRP и данные
+        $combined = array_merge($hrpExpanded, $data);
 
+        // Вычисляем контрольную сумму
+        $checksum = $this->bech32Polymod(array_merge($combined, [0, 0, 0, 0, 0, 0])) ^ 1;
+
+        // Извлекаем 6 значений контрольной суммы
+        $checksumBytes = [];
         for ($i = 0; $i < 6; $i++) {
-            $data[] = ($polymod >> (5 * (5 - $i))) & 31;
+            $checksumBytes[] = ($checksum >> (5 * (5 - $i))) & 31;
         }
 
-        // Кодируем
+        // Формируем итоговый адрес
         $result = $hrp . '1';
-        foreach ($data as $value) {
+        foreach (array_merge($data, $checksumBytes) as $value) {
             $result .= $charset[$value];
         }
 
         return $result;
+    }
+
+    /**
+     * Полином для Bech32 контрольной суммы
+     */
+    private function bech32Polymod(array $values): int
+    {
+        $generator = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+        $chk = 1;
+
+        foreach ($values as $value) {
+            $top = $chk >> 25;
+            $chk = (($chk & 0x1ffffff) << 5) ^ $value;
+
+            for ($i = 0; $i < 5; $i++) {
+                if (($top >> $i) & 1) {
+                    $chk ^= $generator[$i];
+                }
+            }
+        }
+
+        return $chk;
     }
 
     /**
@@ -270,13 +338,16 @@ class BitcoinAddressGenerator implements AddressGeneratorInterface
     private function hrpExpand(string $hrp): array
     {
         $result = [];
-        for ($i = 0; $i < strlen($hrp); $i++) {
+        $len = strlen($hrp);
+
+        for ($i = 0; $i < $len; $i++) {
             $result[] = ord($hrp[$i]) >> 5;
         }
         $result[] = 0;
-        for ($i = 0; $i < strlen($hrp); $i++) {
+        for ($i = 0; $i < $len; $i++) {
             $result[] = ord($hrp[$i]) & 31;
         }
+
         return $result;
     }
 }

@@ -47,4 +47,16 @@ return [
         'transfer_signature' => '0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef',
     ],
 
+    'api' =>[
+        'ethereum' => [
+            'rpc_url' => env('ETHEREUM_RPC_URL'),
+            'api_key' => env('ETHEREUM_PRO_API_KEY'),
+        ],
+        'tron' => [
+            'rpc_url' => env('TRON_RPC_URL'),
+            'api_key' => env('TRON_PRO_API_KEY'),
+        ],
+        'bitcoin' => [],
+    ]
+
 ];

@@ -2,10 +2,10 @@
 
 namespace App\Jobs;
 
-use App\Models\Wallet;
+use App\Infrastructure\Blockchain\Contracts\BlockchainClientOld;
 use App\Models\CryptoTransaction;
+use App\Models\Wallet;
 use App\Services\AccountService;
-use App\Contracts\BlockchainClient;
 use App\Services\TokenConfigService;
 use App\Services\Wallet\WalletCreationService;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -27,8 +27,8 @@ class ProcessIncomingTransactions implements ShouldQueue
         private TokenConfigService $tokenConfigService
     ) {}
     public function handle(
-        BlockchainClient $client,
-        AccountService $accountService,
+        BlockchainClientOld   $client,
+        AccountService        $accountService,
         WalletCreationService $walletCreationService,
     ): void {
 
@@ -82,11 +82,11 @@ class ProcessIncomingTransactions implements ShouldQueue
      * Сканирует один кошелёк, разбивая диапазон на чанки.
      */
     private function scanWallet(
-        Wallet $wallet,
-        BlockchainClient $client,
-        AccountService $accountService,
-        string $contractAddress,
-        int $latestBlock
+        Wallet              $wallet,
+        BlockchainClientOld $client,
+        AccountService      $accountService,
+        string              $contractAddress,
+        int                 $latestBlock
     ): void {
         $fromBlock = ($wallet->last_scanned_block ?? 0) + 1;
         $toBlock = $latestBlock;
@@ -192,7 +192,7 @@ class ProcessIncomingTransactions implements ShouldQueue
     /**
      * Откатывает кошелёк при реорганизации.
      */
-    private function rollbackWallet(Wallet $wallet, BlockchainClient $client, AccountService $accountService): void
+    private function rollbackWallet(Wallet $wallet, BlockchainClientOld $client, AccountService $accountService): void
     {
         // Находим все pending-транзакции с номером блока > последнего стабильного
         $affectedTransactions = CryptoTransaction::where('wallet_id', $wallet->id)
@@ -215,7 +215,7 @@ class ProcessIncomingTransactions implements ShouldQueue
     /**
      * Проверяет подтверждения для pending-транзакций.
      */
-    private function checkConfirmations(BlockchainClient $client, AccountService $accountService, int $latestBlock): void
+    private function checkConfirmations(BlockchainClientOld $client, AccountService $accountService, int $latestBlock): void
     {
         $pendingTxs = CryptoTransaction::where('status', 'pending')
             ->whereNotNull('metadata->block')

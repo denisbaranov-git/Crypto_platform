@@ -5,7 +5,7 @@ namespace App\Services\Wallet\Generators;
 use BitWasp\Bitcoin\Key\Deterministic\HierarchicalKeyFactory;
 use kornrunner\Keccak;
 
-class EthereumHDAddressGenerator
+class EvmHDAddressGenerator
 {
     private string $xpub;
     private HierarchicalKeyFactory $factory;
@@ -25,7 +25,8 @@ class EthereumHDAddressGenerator
     public function generate(int $index): string
     {
         // Восстанавливаем ключ из xpub
-        $extendedKey = $this->factory->fromExtended($this->xpub);
+        //$extendedKey = $this->factory->fromExtended($this->xpub);
+        $extendedKey = HierarchicalKeyFactory::fromExtended($this->xpub);
 
         // Деривируем дочерний ключ по индексу
         // Путь будет: [уже вшитый путь] + $index

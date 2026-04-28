@@ -8,7 +8,7 @@ use Illuminate\Support\Facades\Crypt;
 
 class SystemWalletService
 {
-    public function __construct(private AddressGeneratorInterface $addressGenerator){ }
+    public function __construct(private AddressGeneratorInterfaceOld $addressGenerator){ }
     public function createWallet(int $network_id, string $network, string $type ): void ////denis нужно передавать только ( $network_id, $walletType )
     {
         $walletData = $this->addressGenerator->generate($network);

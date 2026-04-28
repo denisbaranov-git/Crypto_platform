@@ -60,7 +60,8 @@ final class TronClient implements BlockchainClient
         }
 
         foreach ($transactions as $tx) {
-            $txid = (string) data_get($tx, 'txID', '');
+            $txid = (string) data_get($tx, 'txID', ''); //denis
+            //$txid = (string) data_get($response, 'txid', data_get($response, 'txID', ''));
             $contractType = (string) data_get($tx, 'raw_data.contract.0.type', '');
             $value = data_get($tx, 'raw_data.contract.0.parameter.value', []);
 
@@ -265,7 +266,8 @@ final class TronClient implements BlockchainClient
             throw new DomainException($message);
         }
 
-        $txid = (string) data_get($tx, 'txID', '');
+        //$txid = (string) data_get($tx, 'txID', ''); //denis error!! txID из подписанной транзакции $tx , а не из ответа $response
+        $txid = (string) data_get($response, 'txid', data_get($response, 'txID', ''));
         if ($txid === '') {
             throw new DomainException('Tron broadcast succeeded but txID is missing.');
         }
@@ -286,6 +288,9 @@ final class TronClient implements BlockchainClient
     {
         $response = Http::timeout(30)->retry(2, 200)
             ->acceptJson()
+            ->withHeaders([
+                'TRON-PRO-API-KEY' => config('blockchain.api.tron.api_key'), //denis
+            ])
             ->post(rtrim($this->rpcUrl, '/') . $path, $payload);
 
         if (! $response->successful()) {

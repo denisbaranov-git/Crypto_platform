@@ -76,6 +76,7 @@ final class EvmClient implements BlockchainClient
         )));
 
         if (! empty($contractAddresses)) {
+            //eth_getLogs method uses 255 credits!!!!!
             $logs = (array) $this->rpc->call('eth_getLogs', [[
                 'fromBlock' => $hexBlock,
                 'toBlock'   => $hexBlock,

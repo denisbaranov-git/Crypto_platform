@@ -1,8 +1,8 @@
 <?php
 
-namespace App\Contracts;
+namespace App\Infrastructure\Blockchain\Contracts;
 
-interface BlockchainClient
+interface BlockchainClientOld
 {
     /**
      * Получить баланс нативной монеты (ETH, BNB и т.д.) для адреса.
