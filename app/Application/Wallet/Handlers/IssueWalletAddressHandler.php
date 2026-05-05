@@ -7,7 +7,7 @@ use App\Domain\Identity\ValueObjects\UserId;
 use App\Domain\Shared\EventPublisher;
 use App\Domain\Wallet\Repositories\HdWalletRepository;
 use App\Domain\Wallet\Repositories\WalletRepository;
-use App\Domain\Wallet\Services\HdAddressGeneratorInterface;
+use App\Domain\Wallet\Services\HDAddressGeneratorInterface;
 use App\Domain\Wallet\ValueObjects\CurrencyNetworkId;
 use App\Domain\Wallet\ValueObjects\DerivationPath;
 use App\Domain\Wallet\ValueObjects\NetworkCode;
@@ -23,7 +23,7 @@ final class IssueWalletAddressHandler
     public function __construct(
         private WalletRepository            $wallets,
         private HdWalletRepository          $hdWallets,
-        private HdAddressGeneratorInterface $generator,
+        private HDAddressGeneratorInterface $generator,
         private EventPublisher              $events
     ) {}
 
@@ -35,7 +35,8 @@ final class IssueWalletAddressHandler
             $currencyNetworkId = CurrencyNetworkId::fromInt($command->currencyNetworkId);
 
             $wallet = $this->wallets->getByUserAndCurrencyNetwork($userId, $currencyNetworkId);
-
+echo 'fuck ';
+var_dump($wallet);
             if ($wallet->status() !== WalletStatus::ACTIVE) {
                 throw new \DomainException('Wallet is not active');
             }
@@ -51,7 +52,8 @@ final class IssueWalletAddressHandler
             );
 
             $generated = $this->generator->generate($networkCode, $xpub, $index);
-
+echo 'fuck fuck fuck fuck fuck;';
+var_dump($generated);
             $walletAddress = $wallet->issueAddress(
                 WalletAddressValue::fromString($generated->address()),
                 $index,

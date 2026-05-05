@@ -16,9 +16,6 @@ return new class extends Migration
             $table->foreignId('user_id')->constrained();
             $table->foreignId('currency_network_id')->constrained('currency_networks');
             $table->string('status')->default('active');//active,locked,archived
-            // Следующий индекс для HD-деривации адреса
-            //$table->unsignedBigInteger('next_address_index')->default(0);
-            // Удобный указатель на текущий активный адрес
             $table->foreignId('active_address_id')->nullable()->constrained('wallet_addresses')->nullOnDelete();
             $table->timestamps();
 

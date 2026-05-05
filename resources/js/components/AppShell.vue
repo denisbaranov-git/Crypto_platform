@@ -27,6 +27,7 @@ async function handleLogout() {
                     <RouterLink class="text-slate-300 hover:text-white" to="/dashboard">Dashboard</RouterLink>
                     <RouterLink class="text-slate-300 hover:text-white" to="/wallets">Wallets</RouterLink>
                     <RouterLink class="text-slate-300 hover:text-white" to="/withdrawals">Withdrawals</RouterLink>
+                    <RouterLink class="text-slate-300 hover:text-white" to="/transferss">Transfers</RouterLink>
                     <RouterLink v-if="!isLoggedIn" class="text-slate-300 hover:text-white" to="/login">Login</RouterLink>
                     <button
                         v-else

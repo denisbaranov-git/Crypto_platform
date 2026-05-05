@@ -8,7 +8,7 @@ use App\Domain\Shared\EventPublisher;
 use App\Domain\Wallet\Entities\Wallet;
 use App\Domain\Wallet\Repositories\HdWalletRepository;
 use App\Domain\Wallet\Repositories\WalletRepository;
-use App\Domain\Wallet\Services\HdAddressGeneratorInterface;
+use App\Domain\Wallet\Services\HDAddressGeneratorInterface;
 use App\Domain\Wallet\ValueObjects\CurrencyNetworkId;
 use App\Domain\Wallet\ValueObjects\DerivationPath;
 use App\Domain\Wallet\ValueObjects\NetworkCode;
@@ -21,7 +21,7 @@ final class CreateWalletHandler
 {
     public function __construct(
         private WalletRepository            $wallets,
-        private HdAddressGeneratorInterface $generator,
+        private HDAddressGeneratorInterface $generator,
         private HdWalletRepository          $hdWallets,
         private EventPublisher              $events
     ) {}

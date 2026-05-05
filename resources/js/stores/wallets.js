@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { fetchWallets, fetchWallet } from '@/api/wallets'
+import {fetchWallets, fetchWallet, createWallet, storeAddress, storeWallet} from '@/api/wallets'
 
 export const useWalletsStore = defineStore('wallets', () => {
     const wallets = ref([])
@@ -10,6 +10,7 @@ export const useWalletsStore = defineStore('wallets', () => {
     const totalAvailable = computed(() =>
         wallets.value.reduce((sum, wallet) => sum + Number(wallet.available_balance), 0)
     )
+    const walletCreateFormData = ref(null)
 
     async function loadWallets() {
         loading.value = true
@@ -31,6 +32,33 @@ export const useWalletsStore = defineStore('wallets', () => {
             loading.value = false
         }
     }
+    async function issueWalletAddress(wallet) {
+        loading.value = true
+        try {
+            const response = await storeAddress(wallet)
+            currentWallet.value = response.data.data ?? response.data ?? null
+        } finally {
+            loading.value = false
+        }
+    }
+    async function fetchWalletCreateFormData() {
+        loading.value = true
+        try {
+            const response = await createWallet()
+            walletCreateFormData.value = response.data.data ?? response.data ?? null
+        } finally {
+            loading.value = false
+        }
+    }
+    async function storeNewWallet(currency_network_id) {
+        loading.value = true
+        try {
+            const response = await storeWallet(currency_network_id)
+            currentWallet.value = response.data.data ?? response.data ?? null
+        } finally {
+            loading.value = false
+        }
+    }
 
     return {
         wallets,
@@ -39,5 +67,9 @@ export const useWalletsStore = defineStore('wallets', () => {
         totalAvailable,
         loadWallets,
         loadWallet,
+        issueWalletAddress,
+        fetchWalletCreateFormData,
+        walletCreateFormData,
+        storeNewWallet,
     }
 })

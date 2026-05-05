@@ -4,134 +4,130 @@ declare(strict_types=1);
 
 namespace App\Services\Wallet\Generators;
 
-use BitWasp\Bitcoin\Key\Deterministic\HierarchicalKeyFactory;
+use App\Services\Wallet\Crypto\Contracts\Bip32KeyServiceInterface;
 use StephenHill\Base58;
 
-class BitcoinHDAddressGenerator
+final class BitcoinHDAddressGenerator
 {
     use \App\Services\Wallet\Traits\Base58CheckTrait;
 
-    private string $xpub;
     private Base58 $base58;
 
-    public function __construct(string $xpub)
-    {
-        $this->xpub = $xpub;
+    public function __construct(
+        private readonly Bip32KeyServiceInterface $bip32,
+        private readonly string $xpub,
+    ) {
         $this->base58 = new Base58();
     }
-
     /**
-     * Генерирует Bitcoin адрес из HD-кошелька
-     * Путь: m/44'/0'/0'/0/$index (для mainnet)
-     * Путь: m/44'/1'/0'/0/$index (для testnet)
+     * BTC:
+     * - xpub must be account-level:
+     *   m/44'/0'/0' (mainnet)
+     *   m/44'/1'/0' (testnet)
      *
-     * @param int $index Индекс адреса
-     * @param bool $testnet Использовать testnet
-     * @param string $type Тип адреса: 'legacy', 'segwit', 'native'
-     * @return array Информация об адресе
+     * - chain 0 = external (deposit)
+     * - chain 1 = internal/change
      */
-    public function generate(int $index, bool $testnet = false, string $type = 'segwit'): array
-    {
-        // Восстанавливаем ключ из xpub
-        $extendedKey = HierarchicalKeyFactory::fromExtended($this->xpub);
+    public function generate(
+        int $index,
+        bool $testnet = false,
+        string $type = 'segwit',
+        int $chain = 0
+    ): array {
+        if (!in_array($chain, [0, 1], true)) {
+            throw new \InvalidArgumentException('Chain must be 0 (external) or 1 (change).');
+        }
 
-        // Деривируем дочерний ключ
-        $childKey = $extendedKey->deriveChild($index);
+        if (!in_array($type, ['legacy', 'segwit', 'native'], true)) {
+            throw new \InvalidArgumentException("Unknown address type: {$type}");
+        }
 
-        // Получаем публичный ключ
-        $publicKey = $childKey->getPublicKey()->getHex();
+        $network = $testnet ? 'bitcoin_testnet' : 'bitcoin';
+        $publicKeyHex = $this->bip32->derivePublicKeyHex($this->xpub, $network, $chain, $index);
 
-        // Генерируем адрес в зависимости от типа
-        $address = match($type) {
-            'legacy' => $this->generateP2PKHAddress($publicKey, $testnet),
-            'segwit' => $this->generateP2SHAddress($publicKey, $testnet),
-            'native' => $this->generateBech32Address($publicKey, $testnet),
-            default => throw new \InvalidArgumentException("Unknown address type: {$type}")
+        $address = match ($type) {
+            'legacy' => $this->generateP2PKHAddress($publicKeyHex, $testnet),
+            'segwit' => $this->generateP2SHAddress($publicKeyHex, $testnet),
+            'native' => $this->generateBech32Address($publicKeyHex, $testnet),
         };
 
         return [
             'address' => $address,
             'type' => $type,
-            'path' => $testnet ? "m/44'/1'/0'/0/{$index}" : "m/44'/0'/0'/0/{$index}",
+            'path' => $testnet
+                ? "m/44'/1'/0'/{$chain}/{$index}"
+                : "m/44'/0'/0'/{$chain}/{$index}",
+            'chain' => $chain,
             'testnet' => $testnet,
             'index' => $index,
         ];
     }
 
-    /**
-     * Генерирует P2PKH (Legacy) адрес
-     */
-    private function generateP2PKHAddress(string $publicKey, bool $testnet): string
+    private function generateP2PKHAddress(string $publicKeyHex, bool $testnet): string
     {
-        $pubKeyBin = hex2bin($publicKey);
-        $pubKeyCompressed = $this->compressPublicKey($pubKeyBin);
+        $pubKeyBin = hex2bin($publicKeyHex);
 
-        $sha256 = hash('sha256', $pubKeyCompressed, true);
-        $ripeMd160 = hash('ripemd160', $sha256, true);
+        if ($pubKeyBin === false) {
+            throw new \RuntimeException('Invalid public key hex.');
+        }
+
+        $pubKeyCompressed = $this->compressPublicKey($pubKeyBin);
+        $hash160 = hash('ripemd160', hash('sha256', $pubKeyCompressed, true), true);
 
         $networkByte = $testnet ? "\x6f" : "\x00";
-        $versionedPayload = $networkByte . $ripeMd160;
 
-        $checksum = $this->doubleSha256($versionedPayload);
-        $binaryAddress = $versionedPayload . substr($checksum, 0, 4);
-
-        return $this->base58->encode($binaryAddress);
+        return $this->base58CheckEncodeBinary($networkByte . $hash160);
     }
 
-    /**
-     * Генерирует P2SH (SegWit wrapped) адрес
-     */
-    private function generateP2SHAddress(string $publicKey, bool $testnet): string
+    private function generateP2SHAddress(string $publicKeyHex, bool $testnet): string
     {
-        $pubKeyBin = hex2bin($publicKey);
+        $pubKeyBin = hex2bin($publicKeyHex);
+
+        if ($pubKeyBin === false) {
+            throw new \RuntimeException('Invalid public key hex.');
+        }
+
         $pubKeyCompressed = $this->compressPublicKey($pubKeyBin);
+        $pubKeyHash = hash('ripemd160', hash('sha256', $pubKeyCompressed, true), true);
 
-        $sha256 = hash('sha256', $pubKeyCompressed, true);
-        $pubKeyHash = hash('ripemd160', $sha256, true);
+        $redeemScript = hex2bin('0014' . bin2hex($pubKeyHash));
+        if ($redeemScript === false) {
+            throw new \RuntimeException('Failed to build redeem script.');
+        }
 
-        $witnessProgram = "\x00\x14" . $pubKeyHash;
-        $scriptHash = hash('sha256', $witnessProgram, true);
-        $scriptHash160 = hash('ripemd160', $scriptHash, true);
-
+        $scriptHash160 = hash('ripemd160', hash('sha256', $redeemScript, true), true);
         $networkByte = $testnet ? "\xc4" : "\x05";
-        $versionedPayload = $networkByte . $scriptHash160;
 
-        $checksum = $this->doubleSha256($versionedPayload);
-        $binaryAddress = $versionedPayload . substr($checksum, 0, 4);
-
-        return $this->base58->encode($binaryAddress);
+        return $this->base58CheckEncodeBinary($networkByte . $scriptHash160);
     }
 
-    /**
-     * Генерирует Bech32 (Native SegWit) адрес
-     */
-    private function generateBech32Address(string $publicKey, bool $testnet): string
+    private function generateBech32Address(string $publicKeyHex, bool $testnet): string
     {
-        $pubKeyBin = hex2bin($publicKey);
+        $pubKeyBin = hex2bin($publicKeyHex);
+
+        if ($pubKeyBin === false) {
+            throw new \RuntimeException('Invalid public key hex.');
+        }
+
         $pubKeyCompressed = $this->compressPublicKey($pubKeyBin);
+        $hash160 = hash('ripemd160', hash('sha256', $pubKeyCompressed, true), true);
 
-        $sha256 = hash('sha256', $pubKeyCompressed, true);
-        $pubKeyHash = hash('ripemd160', $sha256, true);
-
-        $witnessProgram = "\x00" . $pubKeyHash;
-        $fiveBitWords = $this->convertBits($witnessProgram, 8, 5, true);
-
+        $program = array_merge([0], $this->convertBits($hash160, 8, 5, true));
         $hrp = $testnet ? 'tb' : 'bc';
 
-        return $this->encodeBech32($hrp, $fiveBitWords);
+        return $this->encodeBech32($hrp, $program);
     }
 
-    /**
-     * Сжимает публичный ключ
-     */
     private function compressPublicKey(string $publicKey): string
     {
-        // Если уже сжатый (33 байта) - возвращаем как есть
         if (strlen($publicKey) === 33) {
             return $publicKey;
         }
 
-        // Несжатый (65 байт) - сжимаем
+        if (strlen($publicKey) !== 65) {
+            throw new \RuntimeException('Unexpected public key length.');
+        }
+
         $x = substr($publicKey, 1, 32);
         $y = substr($publicKey, 33, 32);
 
@@ -140,17 +136,13 @@ class BitcoinHDAddressGenerator
         return $prefix . $x;
     }
 
-    /**
-     * Двойной SHA-256
-     */
-    private function doubleSha256(string $data): string
+    private function base58CheckEncodeBinary(string $payload): string
     {
-        return hash('sha256', hash('sha256', $data, true), true);
+        $checksum = substr(hash('sha256', hash('sha256', $payload, true), true), 0, 4);
+
+        return $this->base58->encode($payload . $checksum);
     }
 
-    /**
-     * Конвертация бит для Bech32
-     */
     private function convertBits(string $data, int $fromBits, int $toBits, bool $pad = true): array
     {
         $acc = 0;
@@ -158,8 +150,7 @@ class BitcoinHDAddressGenerator
         $ret = [];
         $maxv = (1 << $toBits) - 1;
 
-        for ($i = 0, $len = strlen($data); $i < $len; $i++) {
-            $value = ord($data[$i]);
+        foreach (array_values(unpack('C*', $data)) as $value) {
             $acc = ($acc << $fromBits) | $value;
             $bits += $fromBits;
 
@@ -176,43 +167,51 @@ class BitcoinHDAddressGenerator
         return $ret;
     }
 
-    /**
-     * Bech32 кодирование
-     */
     private function encodeBech32(string $hrp, array $data): string
     {
         $charset = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+        $combined = array_merge($data, $this->createChecksum($hrp, $data));
 
-        // Расширяем HRP
-        $expanded = [];
-        for ($i = 0, $len = strlen($hrp); $i < $len; $i++) {
-            $expanded[] = ord($hrp[$i]) >> 5;
-        }
-        $expanded[] = 0;
-        for ($i = 0, $len = strlen($hrp); $i < $len; $i++) {
-            $expanded[] = ord($hrp[$i]) & 31;
-        }
-
-        // Вычисляем контрольную сумму
-        $combined = array_merge($expanded, $data, [0, 0, 0, 0, 0, 0]);
-        $checksum = $this->bech32Polymod($combined) ^ 1;
-
-        // Добавляем контрольную сумму
-        $checksumBytes = [];
-        for ($i = 0; $i < 6; $i++) {
-            $checksumBytes[] = ($checksum >> (5 * (5 - $i))) & 31;
-        }
-
-        // Формируем адрес
         $result = $hrp . '1';
-        foreach (array_merge($data, $checksumBytes) as $value) {
+
+        foreach ($combined as $value) {
             $result .= $charset[$value];
         }
 
         return $result;
     }
 
-    private function bech32Polymod(array $values): int
+    private function createChecksum(string $hrp, array $data): array
+    {
+        $values = array_merge($this->expandHrp($hrp), $data, [0, 0, 0, 0, 0, 0]);
+        $polymod = $this->polymod($values) ^ 1;
+
+        $checksum = [];
+        for ($i = 0; $i < 6; $i++) {
+            $checksum[] = ($polymod >> (5 * (5 - $i))) & 31;
+        }
+
+        return $checksum;
+    }
+
+    private function expandHrp(string $hrp): array
+    {
+        $result = [];
+
+        foreach (str_split($hrp) as $char) {
+            $result[] = ord($char) >> 5;
+        }
+
+        $result[] = 0;
+
+        foreach (str_split($hrp) as $char) {
+            $result[] = ord($char) & 31;
+        }
+
+        return $result;
+    }
+
+    private function polymod(array $values): int
     {
         $generator = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
         $chk = 1;

@@ -3,6 +3,7 @@
 use App\Http\Controllers\Api\DashboardController;
 use App\Http\Controllers\Api\MeController;
 use App\Http\Controllers\Api\MobileAuthController;
+use App\Http\Controllers\Api\WalletAddressController;
 use App\Http\Controllers\Api\WalletController;
 use App\Http\Controllers\Api\WithdrawalController;
 use Illuminate\Support\Facades\Route;
@@ -20,8 +21,11 @@ Route::prefix('mobile')->group(function () {
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/me', MeController::class)->name('api.me');
     Route::get('/dashboard', DashboardController::class)->name('api.dashboard');
+    Route::get('/wallets/create', [WalletController::class, 'create'])->name('api.wallet.create');
     Route::get('/wallets', [WalletController::class, 'index'])->name('api.wallets.index');
     Route::get('/wallets/{wallet}', [WalletController::class, 'show'])->name('api.wallets.show');
+    Route::post('/wallets', [WalletController::class, 'store'])->name('api.wallet.store');
+    Route::post('/wallets/{wallet}/addresses', [WalletAddressController::class, 'store'])->name('api.address.store');
 
     Route::prefix('withdrawals')->group(function (): void {
         Route::get('/', [WithdrawalController::class, 'index']);

@@ -9,7 +9,7 @@ use App\Domain\Wallet\ValueObjects\CurrencyNetworkId;
 use App\Domain\Wallet\ValueObjects\WalletId;
 use App\Infrastructure\Persistence\Eloquent\Mappers\WalletMapper;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentWallet;
-use App\Models\EloquentWalletAddress;
+use App\Infrastructure\Persistence\Eloquent\Models\EloquentWalletAddress;
 use Illuminate\Support\Facades\DB;
 
 final class EloquentWalletRepository implements WalletRepository

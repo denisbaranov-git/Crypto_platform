@@ -1,51 +1,37 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Services\Wallet\Generators;
 
-use BitWasp\Bitcoin\Key\Deterministic\HierarchicalKeyFactory;
+use App\Services\Wallet\Crypto\Contracts\Bip32KeyServiceInterface;
 use kornrunner\Keccak;
 
-class EvmHDAddressGenerator
+final class EvmHDAddressGenerator
 {
-    private string $xpub;
-    private HierarchicalKeyFactory $factory;
-
-    public function __construct(string $xpub)
-    {
-        $this->xpub = $xpub;
-        $this->factory = new HierarchicalKeyFactory();
+    public function __construct(
+        private readonly Bip32KeyServiceInterface $bip32,
+        private readonly string $xpub,
+        private readonly string $network,
+    ) {
     }
 
-    /**
-     * Генерирует адрес для пользователя по индексу
-     *
-     * @param int $index Индекс пользователя (0, 1, 2...)
-     * @return string Адрес Ethereum
-     */
     public function generate(int $index): string
     {
-        // Восстанавливаем ключ из xpub
-        //$extendedKey = $this->factory->fromExtended($this->xpub);
-        $extendedKey = HierarchicalKeyFactory::fromExtended($this->xpub);
+        $publicKeyHex = $this->bip32->derivePublicKeyHex($this->xpub, $this->network, $index);
 
-        // Деривируем дочерний ключ по индексу
-        // Путь будет: [уже вшитый путь] + $index
-        // То есть m/44'/60'/0'/0/$index
-        $childKey = $extendedKey->deriveChild($index);
+        if (strlen($publicKeyHex) !== 130 || !str_starts_with($publicKeyHex, '04')) {
+            throw new \RuntimeException('Expected an uncompressed 65-byte public key.');
+        }
 
-        // Получаем публичный ключ
-        $publicKey = $childKey->getPublicKey()->getBuffer()->getHex();
+        $binaryPublicKey = hex2bin(substr($publicKeyHex, 2));
 
-        // 4. Убираем первый байт (04) для хеширования
-        $publicKeyWithoutPrefix = substr($publicKey, 2);
+        if ($binaryPublicKey === false) {
+            throw new \RuntimeException('Unable to convert public key to binary.');
+        }
 
-        // 5. Конвертируем hex в бинарные данные для Keccak
-        $binaryPublicKey = hex2bin($publicKeyWithoutPrefix);
-
-        // 6. Keccak-256 хеш от бинарных данных публичного ключа
         $hash = Keccak::hash($binaryPublicKey, 256);
 
-        // 7. Адрес = последние 20 байт (40 hex символов) хеша с префиксом 0x
         return '0x' . substr($hash, -40);
     }
 }

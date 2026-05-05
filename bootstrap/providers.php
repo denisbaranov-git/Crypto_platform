@@ -4,5 +4,6 @@ return [
     App\Providers\AppServiceProvider::class,
     App\Providers\DepositServiceProvider::class,
     App\Providers\WithdrawalServiceProvider::class,
-    App\Providers\LedgerServiceProvider::class,
+    App\Providers\WalletServiceProvider::class,
+    App\Providers\WalletServiceProvider::class,
 ];

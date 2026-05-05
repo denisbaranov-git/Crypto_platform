@@ -4,50 +4,37 @@ declare(strict_types=1);
 
 namespace App\Services\Wallet\Generators;
 
-use BitWasp\Bitcoin\Key\Deterministic\HierarchicalKeyFactory;
+use App\Services\Wallet\Crypto\Contracts\Bip32KeyServiceInterface;
 use kornrunner\Keccak;
-use StephenHill\Base58;
 
-class TronHDAddressGenerator
+final class TronHDAddressGenerator
 {
     use \App\Services\Wallet\Traits\Base58CheckTrait;
 
-    private string $xpub;
-
-    public function __construct(string $xpub)
-    {
-        $this->xpub = $xpub;
+    public function __construct(
+        private readonly Bip32KeyServiceInterface $bip32,
+        private readonly string $xpub,
+        private readonly string $network,
+    ) {
     }
 
-    /**
-     * Генерирует адрес TRON из HD-кошелька
-     * Использует путь: m/44'/195'/0'/0/$index
-     *
-     * @param int $index Индекс адреса
-     * @return string Адрес TRON (начинается с T)
-     */
     public function generate(int $index): string
     {
-        // Восстанавливаем ключ из xpub
-        $extendedKey = HierarchicalKeyFactory::fromExtended($this->xpub);
+        $publicKeyHex = $this->bip32->derivePublicKeyHex($this->xpub, $this->network, $index);
 
-        // Деривируем дочерний ключ по индексу
-        $childKey = $extendedKey->deriveChild($index);
+        if (strlen($publicKeyHex) !== 130 || !str_starts_with($publicKeyHex, '04')) {
+            throw new \RuntimeException('Expected an uncompressed 65-byte public key.');
+        }
 
-        // Получаем публичный ключ
-        $publicKey = $childKey->getPublicKey()->getHex();
+        $binaryPublicKey = hex2bin(substr($publicKeyHex, 2));
 
-        // Убираем префикс 04
-        $publicKeyBin = hex2bin($publicKey);
-        $publicKeyWithoutPrefix = substr($publicKeyBin, 1);
+        if ($binaryPublicKey === false) {
+            throw new \RuntimeException('Unable to convert public key to binary.');
+        }
 
-        // Keccak-256 хеш
-        $hash = Keccak::hash($publicKeyWithoutPrefix, 256);
-
-        // Tron добавляет байт 0x41 (версия адреса)
+        $hash = Keccak::hash($binaryPublicKey, 256);
         $hexWithPrefix = '41' . substr($hash, -40);
 
-        // Base58Check кодирование
         return $this->base58checkEncode($hexWithPrefix);
     }
 }

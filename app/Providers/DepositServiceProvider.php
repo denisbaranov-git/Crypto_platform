@@ -30,6 +30,9 @@ final class DepositServiceProvider extends ServiceProvider
         $this->app->bind(OutboxRepository::class, EloquentOutboxRepository::class);
         $this->app->bind(CurrencyNetworkQueryService::class, EloquentCurrencyNetworkQueryService::class);
 
+        $this->app->bind(ConfirmationRequirementResolver::class, function ($app) {
+            return new EloquentConfirmationRequirementResolver();
+        });
         // LedgerService
     }
 }
