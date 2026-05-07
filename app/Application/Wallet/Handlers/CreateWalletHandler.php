@@ -2,6 +2,7 @@
 
 namespace App\Application\Wallet\Handlers;
 
+use App\Application\Shared\Contracts\CurrencyNetworkProviderInterface;
 use App\Application\Wallet\Commands\CreateWalletCommand;
 use App\Domain\Identity\ValueObjects\UserId;
 use App\Domain\Shared\EventPublisher;
@@ -20,10 +21,11 @@ use Illuminate\Support\Facades\DB;
 final class CreateWalletHandler
 {
     public function __construct(
-        private WalletRepository            $wallets,
-        private HDAddressGeneratorInterface $generator,
-        private HdWalletRepository          $hdWallets,
-        private EventPublisher              $events
+        private WalletRepository                 $wallets,
+        private HDAddressGeneratorInterface      $generator,
+        private HdWalletRepository               $hdWallets,
+        private CurrencyNetworkProviderInterface $currencyNetworkProvider,
+        private EventPublisher                   $events
     ) {}
 
     public function handle(CreateWalletCommand $command): Wallet
@@ -37,9 +39,17 @@ final class CreateWalletHandler
                 throw new \DomainException('Wallet exists');
             }
 
+            $currencyNetwork = $this->currencyNetworkProvider->findById($currencyNetworkId->value());
+
+            if (!$currencyNetwork) {
+                throw new \DomainException('The selected currency/network pair does not exist');
+            }
             $wallet = Wallet::create($userId, $currencyNetworkId);
-            $networkId = NetworkId::fromInt($command->networkId);
-            $networkCode = NetworkCode::fromString($command->networkCode);
+
+//            $networkId = NetworkId::fromInt($command->networkId);
+//            $networkCode = NetworkCode::fromString($command->networkCode);
+            $networkId = NetworkId::fromInt($currencyNetwork->networkId);
+            $networkCode = NetworkCode::fromString($currencyNetwork->networkCode);
 
             $hdWallet = $this->hdWallets->lockForNetwork($networkId);
             $index =$hdWallet->nextIndex();
@@ -49,6 +59,7 @@ final class CreateWalletHandler
             );
 
             $generated = $this->generator->generate($networkCode, $xpub, $index);
+            //$generated = $this->generator->generate($networkCode, $index);
 
             $wallet->issueAddress(
                 WalletAddressValue::fromString($generated->address()),
@@ -56,6 +67,17 @@ final class CreateWalletHandler
                 DerivationPath::fromString($generated->path())
             );
 
+            /**
+             * WalletAddress::create([
+             * 'wallet_id' => $walletId,
+             * 'network_id' => $networkId,
+             * 'currency_network_id' => $currencyNetworkId,
+             * 'address' => $generated->address(),
+             * 'derivation_chain' => $generated->chain(),
+             * 'derivation_index' => $generated->index(),
+             * 'derivation_path' => $generated->path(),
+             * ]);
+             */
             $this->wallets->save($wallet);
 
             $hdWallet->incrementNextIndex();

@@ -21,6 +21,7 @@ class WalletMapper
         foreach ($addresses as $address) {
             $domainAddresses[] = WalletAddress::create(
                 WalletAddressValue::fromString($address->address),
+                $address->derivationChain,
                 $address->derivation_index,
                 DerivationPath::fromString($address->derivation_path)
             );

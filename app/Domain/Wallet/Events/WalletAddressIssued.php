@@ -8,5 +8,7 @@ final readonly class WalletAddressIssued
         public int $walletId,
         public string $address,
         public int $derivationIndex,
+        public int $derivationChain,
+        public string $derivationPath,
     ) {}
 }

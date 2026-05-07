@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Domain\Wallet\Entities;
 
 use App\Domain\Identity\ValueObjects\UserId;
@@ -20,6 +22,7 @@ use App\Domain\Wallet\ValueObjects\WalletStatus;
 final class Wallet
 {
     use RecordsDomainEvents;
+
     private ?WalletId $id;
     private UserId $userId;
     private CurrencyNetworkId $currencyNetworkId;
@@ -70,16 +73,25 @@ final class Wallet
         return $wallet;
     }
 
-    public function issueAddress(WalletAddressValue $address, int $index, DerivationPath $path): WalletAddress
-    {
+    public function issueAddress(
+        WalletAddressValue $address,
+        int $derivationChain,
+        int $index,
+        DerivationPath $path
+    ): WalletAddress {
         if ($this->status !== WalletStatus::ACTIVE) {
             throw new \DomainException('Wallet is not active');
         }
 
         foreach ($this->addresses as $existing) {
-            if ($existing->derivationIndex() === $index) {
-                throw new \DomainException('Derivation index already used in wallet');
+            // CHANGE: uniqueness is now chain + index, not index alone
+            if (
+                $existing->derivationChain() === $derivationChain
+                && $existing->derivationIndex() === $index
+            ) {
+                throw new \DomainException('Derivation chain + index already used in wallet');
             }
+
             if ($existing->address()->equals($address)) {
                 throw new \DomainException('Address already exists');
             }
@@ -87,8 +99,9 @@ final class Wallet
 
         $walletAddress = WalletAddress::create(
             address: $address,
+            derivationChain: $derivationChain,
             derivationIndex: $index,
-            derivationPath:$path,
+            derivationPath: $path,
         );
 
         $this->addresses[] = $walletAddress;
@@ -101,6 +114,8 @@ final class Wallet
             $this->id->value(),
             $walletAddress->address()->value(),
             $walletAddress->derivationIndex(),
+            $walletAddress->derivationChain(),
+            $walletAddress->derivationPath()->value()
         ));
 
         return $walletAddress;
@@ -109,19 +124,19 @@ final class Wallet
     public function lock(): void
     {
         $this->status = WalletStatus::LOCKED;
-        $this->recordDomainEvent( new WalletLocked($this->id->value()));
+        $this->recordDomainEvent(new WalletLocked($this->id->value()));
     }
 
     public function archive(): void
     {
         $this->status = WalletStatus::ARCHIVED;
-        $this->recordDomainEvent( new WalletArchived($this->id->value()));
+        $this->recordDomainEvent(new WalletArchived($this->id->value()));
     }
 
     public function activate(): void
     {
         $this->status = WalletStatus::ACTIVE;
-        $this->recordDomainEvent( new WalletActivated($this->id->value()));
+        $this->recordDomainEvent(new WalletActivated($this->id->value()));
     }
 
     public function activateAddress(WalletAddressId $addressId): void
@@ -132,7 +147,7 @@ final class Wallet
 
         $this->activeAddressId = $addressId;
 
-        $this->recordDomainEvent( new WalletAddressActivated($this->id->value(), $addressId->value()));
+        $this->recordDomainEvent(new WalletAddressActivated($this->id->value(), $addressId->value()));
     }
 
     private function hasAddress(WalletAddressId $addressId): bool

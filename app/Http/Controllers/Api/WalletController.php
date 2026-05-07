@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Application\Wallet\Commands\CreateWalletCommand;
 use App\Application\Wallet\Commands\IssueWalletAddressCommand;
+use App\Application\Wallet\Handlers\CreateWalletHandler;
 use App\Application\Wallet\Handlers\IssueWalletAddressHandler;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\CreateAddressRequest;
+use App\Http\Requests\CreateWalletRequest;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentCurrencyNetwork;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentWallet;
 use Illuminate\Http\Request;
@@ -72,9 +75,11 @@ final class WalletController extends Controller
 
         return response()->json($query->get());
     }
-    public function store()
+    public function store(CreateWalletRequest $request, CreateWalletHandler  $createWallet)
     {
 
+        $data = $request->validated();
+        $createWallet->handle(new CreateWalletCommand(Auth::id(),$data['network_id'], $data['currency_code'],$data['currency_network_id']));
 
         return response()->json('fuck!!!!!!!!!',201);
     }

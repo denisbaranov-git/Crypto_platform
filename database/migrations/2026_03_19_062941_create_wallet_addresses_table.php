@@ -20,14 +20,18 @@ return new class extends Migration
             $table->string('address', 255);
             $table->unsignedBigInteger('derivation_index');
             $table->string('derivation_path', 255);
+            $table->unsignedTinyInteger('derivation_chain')->default(0);// поле для нормализованной цепочки BIP44: 0 = external (депозиты), 1 = change/internal (внутренние UTXO)
             $table->string('status')->default('active');
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 
             //Уникальность адреса в сети
             $table->unique(['network_id', 'address']);
-            // индекс уникален в рамках сети
-            $table->unique(['network_id', 'derivation_index']);
+            //$table->unique(['network_id', 'derivation_index']);// индекс уникален в рамках сети  //denis ISSUE!!!!!!!!!!!!!!!!!
+            $table->unique(
+                ['network_id', 'derivation_chain', 'derivation_index'],
+                'wallet_addresses_network_id_derivation_chain_derivation_index_unique'
+            );
             // индексы
             $table->index(['wallet_id', 'is_active']);
         });

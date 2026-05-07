@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Wallet;
 
+use App\Domain\Wallet\Services\GeneratedAddress;
 use App\Domain\Wallet\Services\HDAddressGeneratorInterface;
 use App\Services\Wallet\Crypto\Contracts\Bip32KeyServiceInterface;
 use App\Services\Wallet\Generators\BitcoinHDAddressGenerator;
@@ -18,7 +19,7 @@ final class HDAddressGenerator implements HDAddressGeneratorInterface
     ) {
     }
 
-    public function generate(string $network, int $index): array|string
+    public function generate(string $network, int $index): GeneratedAddress
     {
         $xpub = config("wallet.{$network}_xpub");
 

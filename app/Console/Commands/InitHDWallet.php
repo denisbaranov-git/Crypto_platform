@@ -162,6 +162,8 @@ class InitHDWallet extends Command
         $testnet = $this->isTestnetNetwork($network);
 
         $xpub = $this->bip32->accountXpub($mnemonic, $path, $passphrase, $testnet);
+
+        // void-method, so just call it; mismatch throws exception.
         $this->bip32->assertXpubPrefix($xpub, $network);
 
         return $xpub;

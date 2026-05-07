@@ -1,19 +1,17 @@
 <?php
 
+declare(strict_types=1);
+
 namespace App\Domain\Wallet\Services;
 
-use App\Domain\Wallet\ValueObjects\DerivationIndex;
-use App\Domain\Wallet\ValueObjects\NetworkCode;
-use App\Domain\Wallet\ValueObjects\XPub;
+use App\Domain\Wallet\Services\GeneratedAddress;
 
 interface HDAddressGeneratorInterface
 {
-//    public function generate(
-//        NetworkCode $network,
-//        XPub $xpub,
-//        int $index
-//    ): GeneratedAddress;
+    public function generate(string $network, int $index): GeneratedAddress;
 
-    public function generate(string $network, int $index): array|string;
+    /**
+     * @return GeneratedAddress[]
+     */
     public function generateMultiple(string $network, int $startIndex, int $count): array;
 }

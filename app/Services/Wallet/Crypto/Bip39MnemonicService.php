@@ -34,9 +34,9 @@ final class Bip39MnemonicService
         }
 
         $generator = new Bip39SeedGenerator();
-        //$seed = $generator->getSeed($mnemonic, $passphrase);
+        $seed = $generator->getSeed($mnemonic, $passphrase);
+        //return $generator->getSeed($mnemonic, $passphrase);
+        return $seed->getBinary();
 
-        //return $seed->getBinary();
-        return $generator->getSeed($mnemonic, $passphrase);
     }
 }

@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace App\Services\Wallet\Generators;
 
+use App\Domain\Wallet\Services\GeneratedAddress;
 use App\Services\Wallet\Crypto\Contracts\Bip32KeyServiceInterface;
 use StephenHill\Base58;
 
@@ -19,21 +20,13 @@ final class BitcoinHDAddressGenerator
     ) {
         $this->base58 = new Base58();
     }
-    /**
-     * BTC:
-     * - xpub must be account-level:
-     *   m/44'/0'/0' (mainnet)
-     *   m/44'/1'/0' (testnet)
-     *
-     * - chain 0 = external (deposit)
-     * - chain 1 = internal/change
-     */
+
     public function generate(
         int $index,
         bool $testnet = false,
         string $type = 'segwit',
         int $chain = 0
-    ): array {
+    ): GeneratedAddress {
         if (!in_array($chain, [0, 1], true)) {
             throw new \InvalidArgumentException('Chain must be 0 (external) or 1 (change).');
         }
@@ -51,16 +44,14 @@ final class BitcoinHDAddressGenerator
             'native' => $this->generateBech32Address($publicKeyHex, $testnet),
         };
 
-        return [
-            'address' => $address,
-            'type' => $type,
-            'path' => $testnet
+        return new GeneratedAddress(
+            $address,
+            $testnet
                 ? "m/44'/1'/0'/{$chain}/{$index}"
                 : "m/44'/0'/0'/{$chain}/{$index}",
-            'chain' => $chain,
-            'testnet' => $testnet,
-            'index' => $index,
-        ];
+            $chain,
+            $index
+        );
     }
 
     private function generateP2PKHAddress(string $publicKeyHex, bool $testnet): string
@@ -91,6 +82,7 @@ final class BitcoinHDAddressGenerator
         $pubKeyHash = hash('ripemd160', hash('sha256', $pubKeyCompressed, true), true);
 
         $redeemScript = hex2bin('0014' . bin2hex($pubKeyHash));
+
         if ($redeemScript === false) {
             throw new \RuntimeException('Failed to build redeem script.');
         }
