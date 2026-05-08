@@ -7,6 +7,7 @@ namespace App\Console\Commands;
 use App\Services\Wallet\Crypto\Contracts\Bip32KeyServiceInterface;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Crypt;
+use Illuminate\Support\Facades\DB;
 
 class InitHDWallet extends Command
 {
@@ -95,9 +96,12 @@ class InitHDWallet extends Command
             try {
                 $xpub = $this->generateXpub($mnemonic, $network, $config['path']);
 
+                // CHANGE: сначала сохраняем в БД, чтобы hd_wallets был источником истины
+                $this->persistHdWallet($network, $xpub);
+
+                // CHANGE: затем обновляем .env
                 $envKey = strtoupper($network) . '_XPUB';
                 $this->updateEnvFile($envKey, $xpub);
-                $this->saveXpubToConfig($network, $xpub);
 
                 $this->info("✓ {$network}");
                 $this->line("  XPUB: <info>" . substr($xpub, 0, 30) . "...</info>");
@@ -163,10 +167,81 @@ class InitHDWallet extends Command
 
         $xpub = $this->bip32->accountXpub($mnemonic, $path, $passphrase, $testnet);
 
-        // void-method, so just call it; mismatch throws exception.
+        // CHANGE: void-method, throws exception on mismatch
         $this->bip32->assertXpubPrefix($xpub, $network);
 
         return $xpub;
+    }
+
+    /**
+     * CHANGE: persist xpub in hd_wallets
+     *
+     * - If row does not exist: create it with next_index = 0
+     * - If row exists: update xpub, but preserve next_index
+     *
+     * Why:
+     * next_index is operational state; re-running init must not reset address issuance history.
+     */
+    private function persistHdWallet(string $network, string $xpub): void
+    {
+        $networkId = $this->resolveNetworkId($network);
+        $now = now();
+
+        DB::transaction(function () use ($networkId, $network, $xpub, $now): void {
+            $existing = DB::table('hd_wallets')
+                ->where('network_id', $networkId)
+                ->first();
+
+            if ($existing === null) {
+                DB::table('hd_wallets')->insert([
+                    'network_id' => $networkId,
+                    'xpub' => $xpub,
+                    'next_index' => 0,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ]);
+
+                $this->line("  DB: inserted hd_wallets row for {$network} (next_index=0)");
+                return;
+            }
+
+            // CHANGE: preserve next_index, update only xpub and timestamp
+            DB::table('hd_wallets')
+                ->where('network_id', $networkId)
+                ->update([
+                    'xpub' => $xpub,
+                    'updated_at' => $now,
+                ]);
+
+            if (($existing->xpub ?? null) !== $xpub) {
+                $this->warn("  DB: updated xpub for {$network}; next_index preserved ({$existing->next_index})");
+            } else {
+                $this->line("  DB: hd_wallet already up-to-date; next_index preserved ({$existing->next_index})");
+            }
+        });
+    }
+
+    /**
+     * CHANGE: resolve id from networks table without hard-coding one column name.
+     * If your table uses only `code`, this will still work.
+     */
+    private function resolveNetworkId(string $network): int
+    {
+        $networkId = DB::table('networks')->where('code', $network)->value('id');
+
+        if (!$networkId) {
+            $networkId = DB::table('networks')->where('slug', $network)->value('id');
+        }
+
+        if (!$networkId) {
+            $networkId = DB::table('networks')->where('name', $network)->value('id');
+        }
+
+        if (!$networkId) {
+            throw new \RuntimeException("Network record not found for '{$network}'.");
+        }
+
+        return (int) $networkId;
     }
 
     private function isTestnetNetwork(string $network): bool
@@ -194,11 +269,6 @@ class InitHDWallet extends Command
         } catch (\Throwable $e) {
             throw new \RuntimeException('Failed to decrypt MASTER_MNEMONIC_ENCRYPTED. It may be corrupted or encrypted with a different key.');
         }
-    }
-
-    private function saveXpubToConfig(string $network, string $xpub): void
-    {
-        // Optional: DB / cache save
     }
 
     private function updateEnvFile(string $key, string $value): void

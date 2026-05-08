@@ -16,7 +16,7 @@ class EloquentHdWalletRepository implements HdWalletRepository
     public function lockForNetwork(NetworkId $networkId): HdWallet
     {
         //return DB::transaction(function () use ($networkId) {
-            $hdWallet = EloquentHdWallet::where('network_id', $networkId)
+            $hdWallet = EloquentHdWallet::where('network_id', $networkId->value())
                 ->lockForUpdate()
                 ->firstOrFail();
             return $this->mapper->toDomain($hdWallet);
@@ -25,6 +25,12 @@ class EloquentHdWalletRepository implements HdWalletRepository
 
     public function save(HdWallet $hdWallet): void
     {
-        // TODO: Implement save() method.
+        DB::transaction(function () use ($hdWallet) {
+            $model = EloquentHdWallet::where('network_id', $hdWallet->networkId())->firstOrFail();
+
+            $model->next_index = $hdWallet->nextIndex();
+            $model->encrypted_xpub = encrypt($hdWallet->xpub()->value());
+            $model->save();
+        });
     }
 }

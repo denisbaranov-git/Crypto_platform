@@ -10,14 +10,24 @@ use DomainException;
 
 final class HdWallet
 {
-    public function __construct(
-        private readonly HdWalletId $id,
-        private readonly NetworkId $networkId,
-        private readonly XPub $xpub,
-        private  int $nextIndex = 0,
-        //private string $status = 'active'
-    ) {}
+        private ?HdWalletId $id = null;
+        private NetworkId $networkId;
+        private XPub $xpub;
+        private  int $nextIndex;
 
+    public function __construct(NetworkId $networkId, XPub $xpub, int $nextIndex = 0 ) {
+        $this->networkId = $networkId;
+        $this->xpub = $xpub;
+        $this->nextIndex = $nextIndex;
+    }
+
+    public static function hydrate(HdWalletId $id, NetworkId $networkId, XPub $xpub, int $nextIndex): self
+    {
+        $hd_wallet = new self($networkId, $xpub, $nextIndex);
+        $hd_wallet->id = $id;
+
+        return $hd_wallet;
+    }
     public function incrementNextIndex(): void
     {
 //        if ($this->status !== 'active') {
@@ -29,23 +39,14 @@ final class HdWallet
         //return $index;
     }
 
-//    public function rewindTo(int $index): void
-//    {
-//        if ($index < 0) {
-//            throw new DomainException('Index cannot be negative.');
-//        }
-//
-//        $this->nextIndex = $index;
-//    }
-
     public function id(): int
     {
-        return $this->id;
+        return $this->id->value();
     }
 
     public function networkId(): int
     {
-        return $this->networkId;
+        return $this->networkId->value();
     }
 
     public function xpub(): XPub

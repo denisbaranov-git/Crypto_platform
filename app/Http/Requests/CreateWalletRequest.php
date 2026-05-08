@@ -24,6 +24,7 @@ class CreateWalletRequest extends FormRequest
     {
         return [
             'currency_network_id' => 'required|exists:currency_networks,id',
+            //'network_id' => 'required|exists:networks,id',
         ];
     }
 }

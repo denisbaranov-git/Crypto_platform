@@ -49,20 +49,28 @@ final class CreateWalletHandler
 //            $networkId = NetworkId::fromInt($command->networkId);
 //            $networkCode = NetworkCode::fromString($command->networkCode);
             $networkId = NetworkId::fromInt($currencyNetwork->networkId);
-            $networkCode = NetworkCode::fromString($currencyNetwork->networkCode);
+            //$networkCode = NetworkCode::fromString($currencyNetwork->networkCode);
 
             $hdWallet = $this->hdWallets->lockForNetwork($networkId);
             $index =$hdWallet->nextIndex();
 
             $xpub = XPub::fromString(
-                config("wallet.{$networkCode->value()}_xpub")
+                //config("wallet.{$networkCode->value()}_xpub")
+                config("wallet.{$currencyNetwork->networkCode}_xpub")
             );
 
-            $generated = $this->generator->generate($networkCode, $xpub, $index);
+            $generated = $this->generator->generate($currencyNetwork->networkCode, $index);
             //$generated = $this->generator->generate($networkCode, $index);
 
+            /**
+             * WalletAddressValue $address,
+             * int $derivationChain,
+             * int $index,
+             * DerivationPath $path
+             */
             $wallet->issueAddress(
                 WalletAddressValue::fromString($generated->address()),
+                $generated->chain(),
                 $index,
                 DerivationPath::fromString($generated->path())
             );

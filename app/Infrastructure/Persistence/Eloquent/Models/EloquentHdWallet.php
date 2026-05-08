@@ -6,5 +6,6 @@ use Illuminate\Database\Eloquent\Model;
 
 class EloquentHdWallet extends Model
 {
+    protected $table = 'hd_wallets';
     //
 }

@@ -4,11 +4,13 @@ declare(strict_types=1);
 
 namespace App\Providers;
 
+use App\Application\Shared\Contracts\CurrencyNetworkProviderInterface;
 use App\Domain\Wallet\Repositories\HdWalletRepository;
 use App\Domain\Wallet\Repositories\WalletRepository;
 use App\Domain\Wallet\Services\HDAddressGeneratorInterface;
 use App\Infrastructure\Persistence\Eloquent\Repositories\EloquentHdWalletRepository;
 use App\Infrastructure\Persistence\Eloquent\Repositories\EloquentWalletRepository;
+use App\Infrastructure\Persistence\Eloquent\Shared\EloquentCurrencyNetworkProvider;
 use App\Services\Wallet\AddressGenerator;
 use App\Services\Wallet\AddressGeneratorInterface;
 use App\Services\Wallet\HDAddressGenerator;
@@ -24,6 +26,7 @@ final class WalletServiceProvider extends ServiceProvider
         $this->app->bind(WalletRepository::class, EloquentWalletRepository::class);
         $this->app->bind(HdWalletRepository::class, EloquentHdWalletRepository::class);
         $this->app->bind(HDAddressGeneratorInterface::class,HDAddressGenerator::class);
+        $this->app->bind(CurrencyNetworkProviderInterface::class,EloquentCurrencyNetworkProvider::class);
 
 //        $this->app->singleton(BIP32::class, function () {
 //            return new BIP32();

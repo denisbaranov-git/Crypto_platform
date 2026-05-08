@@ -7,8 +7,10 @@ use App\Domain\Wallet\Entities\HdWallet;
 use App\Domain\Wallet\Entities\Wallet;
 use App\Domain\Wallet\Entities\WalletAddress;
 use App\Domain\Wallet\ValueObjects\CurrencyNetworkId;
-use App\Domain\Wallet\ValueObjects\DerivationIndex;
+use App\Domain\Wallet\ValueObjects\NetworkId;
+use App\Domain\Wallet\ValueObjects\XPub;
 use App\Domain\Wallet\ValueObjects\DerivationPath;
+use App\Domain\Wallet\ValueObjects\HdWalletId;
 use App\Domain\Wallet\ValueObjects\WalletAddressValue;
 use App\Domain\Wallet\ValueObjects\WalletId;
 use App\Domain\Wallet\ValueObjects\WalletStatus;
@@ -20,9 +22,10 @@ class HdWalletMapper
     public function toDomain($model): HdWallet
     {
         return HdWallet::hydrate(
-            WalletId::fromInt($model->id),
-            UserId::fromInt($model->user_id),
-            CurrencyNetworkId::fromInt($model->currency_network_id)
+            HdWalletId::fromInt($model->id),
+            NetworkId::fromInt( $model->network_id),
+            XPub::fromString($model->xpub),
+            $model->next_index
         );
     }
 
@@ -31,13 +34,11 @@ class HdWalletMapper
         $model = $model ?? new EloquentHdWallet();
 
         if ($hdWallet->id()) {
-            $model->id = $hdWallet->id()->value();
+            $model->id = $hdWallet->id();
         }
-
-        $model->user_id = $hdWallet->userId()->value();
-        $model->currency_network_id = $hdWallet->currencyNetworkId()->value();
-        $model->status = $hdWallet->status()->value;
-        $model->active_address_id = $hdWallet->activeAddressId()?->value();
+        $model->network_id = $hdWallet->networkId();
+        $model->xpub = $hdWallet->xpub()->value();
+        $model->next_index = $hdWallet->nextIndex();
 
         return $model;
     }

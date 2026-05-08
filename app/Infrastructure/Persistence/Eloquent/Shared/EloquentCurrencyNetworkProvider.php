@@ -19,7 +19,7 @@ class EloquentCurrencyNetworkProvider implements CurrencyNetworkProviderInterfac
                         'networks.code as network_code',
                         'currencies.code as currency_code',
                     ])
-                    ->where('id', $networkCurrencyId)->first();
+                    ->where('currency_networks.id', $networkCurrencyId)->first();
         if (!$model) {
             return null;
         }

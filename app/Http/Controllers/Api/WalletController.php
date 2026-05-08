@@ -79,9 +79,10 @@ final class WalletController extends Controller
     {
 
         $data = $request->validated();
-        $createWallet->handle(new CreateWalletCommand(Auth::id(),$data['network_id'], $data['currency_code'],$data['currency_network_id']));
+        //$wallet = $createWallet->handle(new CreateWalletCommand(Auth::id(),/$data['network_id'], $data['currency_code'],$data['currency_network_id']));
+        $wallet = $createWallet->handle(new CreateWalletCommand(Auth::id(),$data['currency_network_id']));
 
-        return response()->json('fuck!!!!!!!!!',201);
+        return response()->json($wallet,201);
     }
 
     public function createAddress(CreateAddressRequest $request, IssueWalletAddressHandler $issueWalletAddress, string $wallet): array
