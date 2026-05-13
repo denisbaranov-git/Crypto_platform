@@ -2,51 +2,51 @@
 
 namespace App\Domain\Wallet\Entities;
 
-use App\Domain\Wallet\ValueObjects\DerivationIndex;
 use App\Domain\Wallet\ValueObjects\HdWalletId;
 use App\Domain\Wallet\ValueObjects\NetworkId;
 use App\Domain\Wallet\ValueObjects\XPub;
-use DomainException;
 
 final class HdWallet
 {
-        private ?HdWalletId $id = null;
-        private NetworkId $networkId;
-        private XPub $xpub;
-        private  int $nextIndex;
+    private ?HdWalletId $id = null;
+    private NetworkId $networkId;
+    private XPub $xpub;
+    private int $nextIndex;
+    private string $status;
 
-    public function __construct(NetworkId $networkId, XPub $xpub, int $nextIndex = 0 ) {
+    private function __construct(
+        NetworkId $networkId,
+        XPub $xpub,
+        int $nextIndex,
+        string $status,
+    ) {
         $this->networkId = $networkId;
         $this->xpub = $xpub;
         $this->nextIndex = $nextIndex;
+        $this->status = $status;
     }
 
-    public static function hydrate(HdWalletId $id, NetworkId $networkId, XPub $xpub, int $nextIndex): self
-    {
-        $hd_wallet = new self($networkId, $xpub, $nextIndex);
-        $hd_wallet->id = $id;
+    public static function hydrate(
+        HdWalletId $id,
+        NetworkId $networkId,
+        XPub $xpub,
+        int $nextIndex,
+        string $status,
+    ): self {
+        $wallet = new self($networkId, $xpub, $nextIndex, $status);
+        $wallet->id = $id;
 
-        return $hd_wallet;
-    }
-    public function incrementNextIndex(): void
-    {
-//        if ($this->status !== 'active') {
-//            throw new DomainException('HD wallet is not active.');
-//        }
-
-        //$index = $this->nextIndex;
-        $this->nextIndex++;
-        //return $index;
+        return $wallet;
     }
 
-    public function id(): int
+    public function id(): ?HdWalletId
     {
-        return $this->id->value();
+        return $this->id;
     }
 
-    public function networkId(): int
+    public function networkId(): NetworkId
     {
-        return $this->networkId->value();
+        return $this->networkId;
     }
 
     public function xpub(): XPub
@@ -57,5 +57,15 @@ final class HdWallet
     public function nextIndex(): int
     {
         return $this->nextIndex;
+    }
+
+    public function incrementNextIndex(): void
+    {
+        $this->nextIndex++;
+    }
+
+    public function status(): string
+    {
+        return $this->status;
     }
 }

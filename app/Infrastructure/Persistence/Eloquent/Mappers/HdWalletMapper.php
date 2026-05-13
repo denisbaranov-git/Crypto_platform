@@ -2,44 +2,48 @@
 
 namespace App\Infrastructure\Persistence\Eloquent\Mappers;
 
-use App\Domain\Identity\ValueObjects\UserId;
 use App\Domain\Wallet\Entities\HdWallet;
-use App\Domain\Wallet\Entities\Wallet;
-use App\Domain\Wallet\Entities\WalletAddress;
-use App\Domain\Wallet\ValueObjects\CurrencyNetworkId;
 use App\Domain\Wallet\ValueObjects\NetworkId;
 use App\Domain\Wallet\ValueObjects\XPub;
-use App\Domain\Wallet\ValueObjects\DerivationPath;
 use App\Domain\Wallet\ValueObjects\HdWalletId;
-use App\Domain\Wallet\ValueObjects\WalletAddressValue;
-use App\Domain\Wallet\ValueObjects\WalletId;
-use App\Domain\Wallet\ValueObjects\WalletStatus;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentHdWallet;
-use App\Infrastructure\Persistence\Eloquent\Models\EloquentWallet;
 
-class HdWalletMapper
+final class HdWalletMapper
 {
-    public function toDomain($model): HdWallet
+    public function toDomain(EloquentHdWallet $model): HdWallet
     {
         return HdWallet::hydrate(
             HdWalletId::fromInt($model->id),
-            NetworkId::fromInt( $model->network_id),
-            XPub::fromString($model->xpub),
-            $model->next_index
+            NetworkId::fromInt($model->network_id),
+            XPub::fromString($this->decryptXPub($model->encrypted_xpub)),
+            (int) $model->next_index,
+            $model->status,
         );
     }
 
-    public function toModel(HdWallet $hdWallet, ?EloquentHdWallet $model = null): EloquentHdWallet
+    public function toModel(HdWallet $wallet, ?EloquentHdWallet $model = null): EloquentHdWallet
     {
         $model = $model ?? new EloquentHdWallet();
 
-        if ($hdWallet->id()) {
-            $model->id = $hdWallet->id();
+        if ($wallet->id()) {
+            $model->id = $wallet->id()->value();
         }
-        $model->network_id = $hdWallet->networkId();
-        $model->xpub = $hdWallet->xpub()->value();
-        $model->next_index = $hdWallet->nextIndex();
+
+        $model->network_id = $wallet->networkId()->value();
+        $model->encrypted_xpub = $this->encryptXPub($wallet->xpub()->value());
+        $model->next_index = $wallet->nextIndex();
+        $model->status = $wallet->status();
 
         return $model;
+    }
+
+    private function encryptXPub(string $xpub): string
+    {
+        return encrypt($xpub);
+    }
+
+    private function decryptXPub(string $encrypted): string
+    {
+        return decrypt($encrypted);
     }
 }

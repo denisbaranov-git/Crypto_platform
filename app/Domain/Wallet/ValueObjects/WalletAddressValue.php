@@ -11,7 +11,7 @@ class WalletAddressValue
         $this->value = $value;
     }
 
-    public static function fromString(string $address): self
+    public static function fromString(string $value): self
     {
         if (empty($value)) {
             throw new \InvalidArgumentException('Invalid address');

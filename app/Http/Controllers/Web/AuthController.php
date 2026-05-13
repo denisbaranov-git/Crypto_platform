@@ -49,7 +49,7 @@ final class AuthController extends Controller
             new RegisterUserCommand($data['name'], $data['email'], $data['password'])
         );
 
-        Auth::login($eloquentUser);
+        //Auth::login($eloquentUser); //denis //need(queue) send email with activation user link to set user status = active
         $request->session()->regenerate();
 
         return response()->json([
@@ -59,6 +59,7 @@ final class AuthController extends Controller
                 'name' => $eloquentUser->name,
                 'email' => $eloquentUser->email,
             ],
+            'message' => 'User was registered! Send email verification link to activate your account.',
         ], 201);
     }
 

@@ -21,6 +21,9 @@ async function submit() {
         <p class="mb-6 text-sm text-slate-400">Enter your credentials to access the dashboard.</p>
 
         <form class="space-y-4" @submit.prevent="submit">
+            <p v-if="auth.userRegister" class="rounded-xl border border-green-900 bg-green-950/40 px-4 py-3 text-sm text-green-300">
+                {{ auth.userRegister.message }}
+            </p>
             <div>
                 <label class="mb-1 block text-sm text-slate-300">Email</label>
                 <input

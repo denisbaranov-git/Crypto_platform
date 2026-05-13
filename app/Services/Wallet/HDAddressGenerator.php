@@ -26,7 +26,21 @@ final class HDAddressGenerator implements HDAddressGeneratorInterface
         if (!$xpub) {
             throw new InvalidArgumentException("XPUB not configured for network: {$network}");
         }
-
+        /**
+         * ethereum
+         * arbitrum
+         * base
+         * polygon
+         * bsc
+         * tron
+         * bitcoin
+         * ethereum_sepolia
+         * arbitrum_sepolia
+         * base_sepolia
+         * polygon_amoy
+         * tron_nile
+         * bitcoin_testnet
+         */
         return match ($network) {
             'ethereum',
             'ethereum_sepolia',

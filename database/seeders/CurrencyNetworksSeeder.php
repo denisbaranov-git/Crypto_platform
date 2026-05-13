@@ -6,103 +6,155 @@ namespace Database\Seeders;
 
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
-use RuntimeException;
 
 final class CurrencyNetworksSeeder extends Seeder
 {
     public function run(): void
     {
-        // Получаем ID всех сетей
-        $ethereumId = DB::table('networks')->where('code', 'ethereum')->value('id');
-        $tronId = DB::table('networks')->where('code', 'tron')->value('id');
-        $bitcoinId = DB::table('networks')->where('code', 'bitcoin')->value('id');
+        $networkIds = $this->loadNetworkIds();
+        $currencyIds = $this->loadCurrencyIds();
 
-        // Получаем ID тестовых сетей
-        $ethereumSepoliaId = DB::table('networks')->where('code', 'ethereum_sepolia')->value('id');
-        $arbitrumSepoliaId = DB::table('networks')->where('code', 'arbitrum_sepolia')->value('id');
-        $baseSepoliaId = DB::table('networks')->where('code', 'base_sepolia')->value('id');
-        $polygonAmoyId = DB::table('networks')->where('code', 'polygon_amoy')->value('id');
-        $tronNileId = DB::table('networks')->where('code', 'tron_nile')->value('id');
-        $bitcoinTestnetId = DB::table('networks')->where('code', 'bitcoin_testnet')->value('id');
-
-        // Получаем ID валют
-        $ethId = DB::table('currencies')->where('code', 'ETH')->value('id');
-        $trxId = DB::table('currencies')->where('code', 'TRX')->value('id');
-        $btcId = DB::table('currencies')->where('code', 'BTC')->value('id');
-        $usdtId = DB::table('currencies')->where('code', 'USDT')->value('id');
-        $maticId = DB::table('currencies')->where('code', 'MATIC')->value('id');
-        $usdcId = DB::table('currencies')->where('code', 'USDC')->value('id');
-
-        // Основные записи (mainnet + testnet)
         $rows = [
-            // ===== Ethereum Mainnet =====
+            // =========================
+            // Mainnet
+            // =========================
             [
-                'network_id' => $ethereumId,
-                'currency_id' => $ethId,
+                'network_code' => 'ethereum',
+                'currency_code' => 'ETH',
                 'decimals' => 18,
                 'contract_address' => null,
                 'min_confirmations' => 12,
-                'min_withdrawal_amount' => '0.001',
+                'min_withdrawal_amount' => '0.001000000000000000',
                 'is_active' => true,
+                'is_deposit_enabled' => true,
+                'is_withdrawal_enabled' => true,
+                'sort_order' => 0,
+                'metadata' => ['provider' => 'native'],
             ],
             [
-                'network_id' => $ethereumId,
-                'currency_id' => $usdtId,
+                'network_code' => 'ethereum',
+                'currency_code' => 'USDT',
                 'decimals' => 6,
                 'contract_address' => env('ETHEREUM_USDT_CONTRACT'),
                 'min_confirmations' => 12,
                 'min_withdrawal_amount' => '1.000000',
                 'is_active' => true,
+                'is_deposit_enabled' => true,
+                'is_withdrawal_enabled' => true,
+                'sort_order' => 1,
+                'metadata' => ['provider' => 'token'],
             ],
-
-            // ===== TRON Mainnet =====
             [
-                'network_id' => $tronId,
-                'currency_id' => $trxId,
+                'network_code' => 'arbitrum',
+                'currency_code' => 'ETH',
+                'decimals' => 18,
+                'contract_address' => null,
+                'min_confirmations' => 12,
+                'min_withdrawal_amount' => '0.001000000000000000',
+                'is_active' => true,
+                'is_deposit_enabled' => true,
+                'is_withdrawal_enabled' => true,
+                'sort_order' => 0,
+                'metadata' => ['provider' => 'native'],
+            ],
+            [
+                'network_code' => 'base',
+                'currency_code' => 'ETH',
+                'decimals' => 18,
+                'contract_address' => null,
+                'min_confirmations' => 12,
+                'min_withdrawal_amount' => '0.001000000000000000',
+                'is_active' => true,
+                'is_deposit_enabled' => true,
+                'is_withdrawal_enabled' => true,
+                'sort_order' => 0,
+                'metadata' => ['provider' => 'native'],
+            ],
+            [
+                'network_code' => 'polygon',
+                'currency_code' => 'MATIC',
+                'decimals' => 18,
+                'contract_address' => null,
+                'min_confirmations' => 12,
+                'min_withdrawal_amount' => '0.001000000000000000',
+                'is_active' => true,
+                'is_deposit_enabled' => true,
+                'is_withdrawal_enabled' => true,
+                'sort_order' => 0,
+                'metadata' => ['provider' => 'native'],
+            ],
+            [
+                'network_code' => 'bsc',
+                'currency_code' => 'BNB',
+                'decimals' => 18,
+                'contract_address' => null,
+                'min_confirmations' => 12,
+                'min_withdrawal_amount' => '0.001000000000000000',
+                'is_active' => true,
+                'is_deposit_enabled' => true,
+                'is_withdrawal_enabled' => true,
+                'sort_order' => 0,
+                'metadata' => ['provider' => 'native'],
+            ],
+            [
+                'network_code' => 'tron',
+                'currency_code' => 'TRX',
                 'decimals' => 6,
                 'contract_address' => null,
                 'min_confirmations' => 20,
                 'min_withdrawal_amount' => '0.000001',
                 'is_active' => true,
+                'is_deposit_enabled' => true,
+                'is_withdrawal_enabled' => true,
+                'sort_order' => 0,
+                'metadata' => ['provider' => 'native'],
             ],
             [
-                'network_id' => $tronId,
-                'currency_id' => $usdtId,
+                'network_code' => 'tron',
+                'currency_code' => 'USDT',
                 'decimals' => 6,
                 'contract_address' => env('TRON_USDT_CONTRACT'),
                 'min_confirmations' => 20,
                 'min_withdrawal_amount' => '1.000000',
                 'is_active' => true,
+                'is_deposit_enabled' => true,
+                'is_withdrawal_enabled' => true,
+                'sort_order' => 1,
+                'metadata' => ['provider' => 'token'],
             ],
-
-            // ===== Bitcoin Mainnet =====
             [
-                'network_id' => $bitcoinId,
-                'currency_id' => $btcId,
+                'network_code' => 'bitcoin',
+                'currency_code' => 'BTC',
                 'decimals' => 8,
                 'contract_address' => null,
                 'min_confirmations' => 6,
                 'min_withdrawal_amount' => '0.00000001',
                 'is_active' => true,
+                'is_deposit_enabled' => true,
+                'is_withdrawal_enabled' => true,
+                'sort_order' => 0,
+                'metadata' => ['provider' => 'native'],
             ],
 
-            // ===== TESTNETS =====
-
-            // Ethereum Sepolia
+            // =========================
+            // Testnets
+            // =========================
             [
-                'network_id' => $ethereumSepoliaId,
-                'currency_id' => $ethId,
+                'network_code' => 'ethereum_sepolia',
+                'currency_code' => 'ETH',
                 'decimals' => 18,
                 'contract_address' => null,
-                'min_confirmations' => 3, // Меньше для тестовой сети
+                'min_confirmations' => 3,
                 'min_withdrawal_amount' => '0.000000000000000001',
-                'is_active' => env('BLOCKCHAIN_TESTNET_MODE', false), // Активна только в тестовом режиме
+                'is_active' => env('BLOCKCHAIN_TESTNET_MODE', false),
                 'is_deposit_enabled' => env('BLOCKCHAIN_TESTNET_MODE', false),
                 'is_withdrawal_enabled' => env('BLOCKCHAIN_TESTNET_MODE', false),
+                'sort_order' => 0,
+                'metadata' => ['provider' => 'native', 'is_testnet' => true],
             ],
             [
-                'network_id' => $ethereumSepoliaId,
-                'currency_id' => $usdtId,
+                'network_code' => 'ethereum_sepolia',
+                'currency_code' => 'USDT',
                 'decimals' => 6,
                 'contract_address' => env('SEPOLIA_USDT_CONTRACT'),
                 'min_confirmations' => 3,
@@ -110,12 +162,12 @@ final class CurrencyNetworksSeeder extends Seeder
                 'is_active' => env('BLOCKCHAIN_TESTNET_MODE', false),
                 'is_deposit_enabled' => env('BLOCKCHAIN_TESTNET_MODE', false),
                 'is_withdrawal_enabled' => env('BLOCKCHAIN_TESTNET_MODE', false),
+                'sort_order' => 1,
+                'metadata' => ['provider' => 'token', 'is_testnet' => true],
             ],
-
-            // Arbitrum Sepolia
             [
-                'network_id' => $arbitrumSepoliaId,
-                'currency_id' => $ethId,
+                'network_code' => 'arbitrum_sepolia',
+                'currency_code' => 'ETH',
                 'decimals' => 18,
                 'contract_address' => null,
                 'min_confirmations' => 3,
@@ -123,23 +175,12 @@ final class CurrencyNetworksSeeder extends Seeder
                 'is_active' => env('BLOCKCHAIN_TESTNET_MODE', false),
                 'is_deposit_enabled' => env('BLOCKCHAIN_TESTNET_MODE', false),
                 'is_withdrawal_enabled' => env('BLOCKCHAIN_TESTNET_MODE', false),
+                'sort_order' => 0,
+                'metadata' => ['provider' => 'native', 'is_testnet' => true],
             ],
             [
-                'network_id' => $arbitrumSepoliaId,
-                'currency_id' => $usdcId,
-                'decimals' => 6,
-                'contract_address' => '0x75faf114eafb1BDbe2F0316DF893fd58CE46AA4d',
-                'min_confirmations' => 3,
-                'min_withdrawal_amount' => '1.000000',
-                'is_active' => env('BLOCKCHAIN_TESTNET_MODE', false),
-                'is_deposit_enabled' => env('BLOCKCHAIN_TESTNET_MODE', false),
-                'is_withdrawal_enabled' => env('BLOCKCHAIN_TESTNET_MODE', false),
-            ],
-
-            // Base Sepolia
-            [
-                'network_id' => $baseSepoliaId,
-                'currency_id' => $ethId,
+                'network_code' => 'base_sepolia',
+                'currency_code' => 'ETH',
                 'decimals' => 18,
                 'contract_address' => null,
                 'min_confirmations' => 3,
@@ -147,23 +188,12 @@ final class CurrencyNetworksSeeder extends Seeder
                 'is_active' => env('BLOCKCHAIN_TESTNET_MODE', false),
                 'is_deposit_enabled' => env('BLOCKCHAIN_TESTNET_MODE', false),
                 'is_withdrawal_enabled' => env('BLOCKCHAIN_TESTNET_MODE', false),
+                'sort_order' => 0,
+                'metadata' => ['provider' => 'native', 'is_testnet' => true],
             ],
             [
-                'network_id' => $baseSepoliaId,
-                'currency_id' => $usdcId,
-                'decimals' => 6,
-                'contract_address' => '0x036CbD53842c5426634e7929541eC2318f3dCF7e',
-                'min_confirmations' => 3,
-                'min_withdrawal_amount' => '1.000000',
-                'is_active' => env('BLOCKCHAIN_TESTNET_MODE', false),
-                'is_deposit_enabled' => env('BLOCKCHAIN_TESTNET_MODE', false),
-                'is_withdrawal_enabled' => env('BLOCKCHAIN_TESTNET_MODE', false),
-            ],
-
-            // Polygon Amoy
-            [
-                'network_id' => $polygonAmoyId,
-                'currency_id' => $maticId,
+                'network_code' => 'polygon_amoy',
+                'currency_code' => 'MATIC',
                 'decimals' => 18,
                 'contract_address' => null,
                 'min_confirmations' => 3,
@@ -171,23 +201,12 @@ final class CurrencyNetworksSeeder extends Seeder
                 'is_active' => env('BLOCKCHAIN_TESTNET_MODE', false),
                 'is_deposit_enabled' => env('BLOCKCHAIN_TESTNET_MODE', false),
                 'is_withdrawal_enabled' => env('BLOCKCHAIN_TESTNET_MODE', false),
+                'sort_order' => 0,
+                'metadata' => ['provider' => 'native', 'is_testnet' => true],
             ],
             [
-                'network_id' => $polygonAmoyId,
-                'currency_id' => $usdtId,
-                'decimals' => 6,
-                'contract_address' => '0x3813e82e6f7098b9583FC0F33a962D02018B6803',
-                'min_confirmations' => 3,
-                'min_withdrawal_amount' => '1.000000',
-                'is_active' => env('BLOCKCHAIN_TESTNET_MODE', false),
-                'is_deposit_enabled' => env('BLOCKCHAIN_TESTNET_MODE', false),
-                'is_withdrawal_enabled' => env('BLOCKCHAIN_TESTNET_MODE', false),
-            ],
-
-            // TRON Nile
-            [
-                'network_id' => $tronNileId,
-                'currency_id' => $trxId,
+                'network_code' => 'tron_nile',
+                'currency_code' => 'TRX',
                 'decimals' => 6,
                 'contract_address' => null,
                 'min_confirmations' => 3,
@@ -195,10 +214,12 @@ final class CurrencyNetworksSeeder extends Seeder
                 'is_active' => env('BLOCKCHAIN_TESTNET_MODE', false),
                 'is_deposit_enabled' => env('BLOCKCHAIN_TESTNET_MODE', false),
                 'is_withdrawal_enabled' => env('BLOCKCHAIN_TESTNET_MODE', false),
+                'sort_order' => 0,
+                'metadata' => ['provider' => 'native', 'is_testnet' => true],
             ],
             [
-                'network_id' => $tronNileId,
-                'currency_id' => $usdtId,
+                'network_code' => 'tron_nile',
+                'currency_code' => 'USDT',
                 'decimals' => 6,
                 'contract_address' => env('NILE_USDT_CONTRACT'),
                 'min_confirmations' => 3,
@@ -206,12 +227,12 @@ final class CurrencyNetworksSeeder extends Seeder
                 'is_active' => env('BLOCKCHAIN_TESTNET_MODE', false),
                 'is_deposit_enabled' => env('BLOCKCHAIN_TESTNET_MODE', false),
                 'is_withdrawal_enabled' => env('BLOCKCHAIN_TESTNET_MODE', false),
+                'sort_order' => 1,
+                'metadata' => ['provider' => 'token', 'is_testnet' => true],
             ],
-
-            // Bitcoin Testnet
             [
-                'network_id' => $bitcoinTestnetId,
-                'currency_id' => $btcId,
+                'network_code' => 'bitcoin_testnet',
+                'currency_code' => 'BTC',
                 'decimals' => 8,
                 'contract_address' => null,
                 'min_confirmations' => 2,
@@ -219,32 +240,37 @@ final class CurrencyNetworksSeeder extends Seeder
                 'is_active' => env('BLOCKCHAIN_TESTNET_MODE', false),
                 'is_deposit_enabled' => env('BLOCKCHAIN_TESTNET_MODE', false),
                 'is_withdrawal_enabled' => env('BLOCKCHAIN_TESTNET_MODE', false),
+                'sort_order' => 0,
+                'metadata' => ['provider' => 'native', 'is_testnet' => true],
             ],
         ];
 
         foreach ($rows as $row) {
-            // Пропускаем если нет network_id или currency_id
-            if (!$row['network_id'] || !$row['currency_id']) {
-                // Для тестовых сетей это нормально, если они не настроены
-                if (empty($row['is_active'])) {
-                    continue;
-                }
-                throw new RuntimeException('Missing network/currency dependency while seeding currency_networks.');
+            $networkId = $networkIds[$row['network_code']] ?? null;
+            $currencyId = $currencyIds[$row['currency_code']] ?? null;
+
+            if (!$networkId) {
+                throw new \RuntimeException("Network not found for code [{$row['network_code']}]. Run NetworksSeeder first.");
             }
 
-            // Для USDT/USDC пропускаем если нет адреса контракта (кроме тестовых сетей)
-            if (in_array($row['currency_id'], [$usdtId, $usdcId]) && empty($row['contract_address'])) {
-                if (empty($row['is_active'])) {
-                    continue; // Тестовые сети могут быть неактивны
-                }
-                // In production you should set contract env vars.
+            if (!$currencyId) {
+                throw new \RuntimeException("Currency not found for code [{$row['currency_code']}].");
+            }
+
+            // Token pairs can be skipped if contract is not configured.
+            if ($row['contract_address'] === null && $row['currency_code'] !== $this->nativeCurrencyFor($row['network_code'])) {
+                continue;
+            }
+
+            if ($row['contract_address'] === null && in_array($row['currency_code'], ['USDT', 'USDC'], true)) {
+                // token row without contract is useless; skip gracefully
                 continue;
             }
 
             DB::table('currency_networks')->updateOrInsert(
                 [
-                    'network_id' => $row['network_id'],
-                    'currency_id' => $row['currency_id'],
+                    'network_id' => $networkId,
+                    'currency_id' => $currencyId,
                 ],
                 [
                     'decimals' => $row['decimals'],
@@ -256,18 +282,79 @@ final class CurrencyNetworksSeeder extends Seeder
                     'use_finality' => false,
                     'finalization_blocks' => null,
                     'finality_threshold' => null,
-                    'is_active' => $row['is_active'] ?? true,
-                    'is_deposit_enabled' => $row['is_deposit_enabled'] ?? true,
-                    'is_withdrawal_enabled' => $row['is_withdrawal_enabled'] ?? true,
-                    'sort_order' => $row['is_active'] ? 0 : 999, // Неактивные в конец
-                    'metadata' => json_encode([
-                        'is_testnet' => true,
-                        'testnet_faucet' => $row['metadata']['faucet_url'] ?? null,
-                    ], JSON_THROW_ON_ERROR),
+                    'is_active' => $row['is_active'],
+                    'is_deposit_enabled' => $row['is_deposit_enabled'],
+                    'is_withdrawal_enabled' => $row['is_withdrawal_enabled'],
+                    'sort_order' => $row['sort_order'],
+                    'metadata' => json_encode($row['metadata'], JSON_THROW_ON_ERROR),
                     'updated_at' => now(),
                     'created_at' => now(),
                 ]
             );
         }
+    }
+
+    /**
+     * @return array<string,int>
+     */
+    private function loadNetworkIds(): array
+    {
+        $codes = [
+            'ethereum',
+            'arbitrum',
+            'base',
+            'polygon',
+            'bsc',
+            'tron',
+            'bitcoin',
+            'ethereum_sepolia',
+            'arbitrum_sepolia',
+            'base_sepolia',
+            'polygon_amoy',
+            'tron_nile',
+            'bitcoin_testnet',
+        ];
+
+        $ids = [];
+        foreach ($codes as $code) {
+            $id = DB::table('networks')->where('code', $code)->value('id');
+            if (!$id) {
+                throw new \RuntimeException("Network [{$code}] is missing. Run NetworksSeeder first.");
+            }
+            $ids[$code] = (int) $id;
+        }
+
+        return $ids;
+    }
+
+    /**
+     * @return array<string,int>
+     */
+    private function loadCurrencyIds(): array
+    {
+        $codes = ['ETH', 'TRX', 'BTC', 'USDT', 'USDC', 'MATIC', 'BNB'];
+
+        $ids = [];
+        foreach ($codes as $code) {
+            $id = DB::table('currencies')->where('code', $code)->value('id');
+            if (!$id) {
+                throw new \RuntimeException("Currency [{$code}] is missing. Add it to currencies seeder before running this seeder.");
+            }
+            $ids[$code] = (int) $id;
+        }
+
+        return $ids;
+    }
+
+    private function nativeCurrencyFor(string $networkCode): string
+    {
+        return match ($networkCode) {
+            'ethereum', 'arbitrum', 'base', 'ethereum_sepolia', 'arbitrum_sepolia', 'base_sepolia' => 'ETH',
+            'polygon', 'polygon_amoy' => 'MATIC',
+            'bsc' => 'BNB',
+            'tron', 'tron_nile' => 'TRX',
+            'bitcoin', 'bitcoin_testnet' => 'BTC',
+            default => throw new \InvalidArgumentException("Unknown network code [{$networkCode}]."),
+        };
     }
 }

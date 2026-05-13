@@ -7,6 +7,7 @@ use App\Domain\Wallet\Entities\Wallet;
 use App\Domain\Wallet\Entities\WalletAddress;
 use App\Domain\Wallet\ValueObjects\CurrencyNetworkId;
 use App\Domain\Wallet\ValueObjects\DerivationPath;
+use App\Domain\Wallet\ValueObjects\WalletAddressId;
 use App\Domain\Wallet\ValueObjects\WalletAddressValue;
 use App\Domain\Wallet\ValueObjects\WalletId;
 use App\Domain\Wallet\ValueObjects\WalletStatus;
@@ -19,12 +20,23 @@ class WalletMapper
         $domainAddresses = [];
 
         foreach ($addresses as $address) {
-            $domainAddresses[] = WalletAddress::create(
+//            $domainAddresses[] = WalletAddress::create(
+//                $address->id,
+//                WalletAddressValue::fromString($address->address),
+//                $address->derivation_chain,
+//                $address->derivation_index,
+//                DerivationPath::fromString($address->derivation_path)
+//            );
+            $domainAddresses[] = WalletAddress::hydrate(
+                WalletAddressId::fromInt($address->id),
                 WalletAddressValue::fromString($address->address),
-                $address->derivationChain,
+                $address->derivation_chain,
                 $address->derivation_index,
-                DerivationPath::fromString($address->derivation_path)
+                DerivationPath::fromString($address->derivation_path),
+                $address->is_active,
+                $address->status
             );
+
         }
 
         return Wallet::hydrate(

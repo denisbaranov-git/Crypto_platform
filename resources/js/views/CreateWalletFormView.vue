@@ -1,12 +1,14 @@
 <script setup>
 import {computed, onMounted, onUnmounted, reactive, ref, watch} from 'vue'
-import {useRoute} from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import {useAuthStore} from '@/stores/auth'
 import {useWalletsStore} from '@/stores/wallets'
 
 const auth = useAuthStore()
 const walletsStore = useWalletsStore()
 const route = useRoute()
+const router = useRouter()
+
 
 const form = reactive({
     wallet_id: '',
@@ -62,9 +64,9 @@ async function submit() {
         const created = await walletsStore.storeNewWallet({
             currency_network_id: Number(form.currency_network_id),
         })
-
-        formSuccess.value = `Wallet #${created.id} created successfully.`
+        formSuccess.value = `Wallet #${walletsStore.currentWallet.id} created successfully.`
         resetForm()
+        router.push(`/wallets/${walletsStore.currentWallet.id}`)
     } catch (e) {
         formError.value = e?.response?.data?.message || e?.message || 'Unable to create wallet'
     }

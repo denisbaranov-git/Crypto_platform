@@ -82,9 +82,7 @@ final class Wallet
         if ($this->status !== WalletStatus::ACTIVE) {
             throw new \DomainException('Wallet is not active');
         }
-
         foreach ($this->addresses as $existing) {
-            // CHANGE: uniqueness is now chain + index, not index alone
             if (
                 $existing->derivationChain() === $derivationChain
                 && $existing->derivationIndex() === $index
@@ -96,7 +94,6 @@ final class Wallet
                 throw new \DomainException('Address already exists');
             }
         }
-
         $walletAddress = WalletAddress::create(
             address: $address,
             derivationChain: $derivationChain,
@@ -105,19 +102,17 @@ final class Wallet
         );
 
         $this->addresses[] = $walletAddress;
-
-        if ($this->activeAddressId === null) {
-            $this->activeAddressId = $walletAddress->id();
-        }
+//        if ($this->activeAddressId === null) {
+//            $this->activeAddressId = $walletAddress->id();
+//        }
 
         $this->recordDomainEvent(new WalletAddressIssued(
-            $this->id->value(),
+            $this->id?->value(),
             $walletAddress->address()->value(),
             $walletAddress->derivationIndex(),
             $walletAddress->derivationChain(),
             $walletAddress->derivationPath()->value()
         ));
-
         return $walletAddress;
     }
 

@@ -17,6 +17,7 @@ final class CurrenciesSeeder extends Seeder
             ['code' => 'ETH', 'name' => 'Ethereum', 'type' => 'crypto', 'symbol' => 'Ξ'],
             ['code' => 'TRX', 'name' => 'Tron', 'type' => 'crypto', 'symbol' => 'TRX'],
             ['code' => 'MATIC', 'name' => 'Polygon', 'type' => 'crypto', 'symbol' => 'MATIC'],
+            ['code' => 'BNB', 'name' => 'BNB', 'type' => 'crypto','symbol' => 'BNB'],
 
             // Стейблкоины
             ['code' => 'USDT', 'name' => 'Tether USD', 'type' => 'crypto', 'symbol' => '₮', 'is_stablecoin' => true],
@@ -83,6 +84,7 @@ final class CurrenciesSeeder extends Seeder
             'ETH' => '/images/crypto/eth.svg',
             'TRX' => '/images/crypto/trx.svg',
             'MATIC' => '/images/crypto/matic.svg',
+            'BNB' => '/images/crypto/bnb.svg',
             'USDT' => '/images/crypto/usdt.svg',
             'USDC' => '/images/crypto/usdc.svg',
             'DAI' => '/images/crypto/dai.svg',
@@ -98,6 +100,7 @@ final class CurrenciesSeeder extends Seeder
             'ETH' => 'ethereum',
             'TRX' => 'tron',
             'MATIC' => 'matic-network',
+            'BNB' => 'bnb',
             'USDT' => 'tether',
             'USDC' => 'usd-coin',
             'DAI' => 'dai',

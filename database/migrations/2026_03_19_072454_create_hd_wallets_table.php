@@ -13,9 +13,13 @@ return new class extends Migration
     {
         Schema::create('hd_wallets', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('network_id')->constrained('networks');
-            $table->string('xpub');
+            $table->foreignId('network_id')->constrained('networks')->unique();
+
+            // В serious system xpub лучше держать encrypted at rest
+            $table->text('encrypted_xpub');
             $table->unsignedBigInteger('next_index')->default(0);
+
+            $table->string('status', 20)->default('active'); // active, disabled
             $table->timestamps();
 
             $table->unique(['network_id'], 'unique_hd_wallet_per_network');

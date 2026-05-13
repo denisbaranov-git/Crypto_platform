@@ -11,20 +11,22 @@ final class FeeRulesSeeder extends Seeder
 {
     public function run(): void
     {
-        $pairs = DB::table('currency_networks')->get()->keyBy('id');
+        $currencyNetworks = DB::table('currency_networks')->get();
 
-        foreach ($pairs as $pair) {
-            $currencyCode = DB::table('currencies')->where('id', $pair->currency_id)->value('code');
-            $networkCode = DB::table('networks')->where('id', $pair->network_id)->value('code');
+        $networkCodes = DB::table('networks')->pluck('code', 'id')->all();
+        $currencyCodes = DB::table('currencies')->pluck('code', 'id')->all();
 
-            $fee = match ("{$networkCode}:{$currencyCode}") {
-                'ethereum:ETH' => '0.002000000000000000',
-                'ethereum:USDT' => '5.000000',
-                'tron:TRX' => '1.000000',
-                'tron:USDT' => '1.000000',
-                'bitcoin:BTC' => '0.00020000',
-                default => '0',
-            };
+        foreach ($currencyNetworks as $pair) {
+            $networkCode = $networkCodes[$pair->network_id] ?? null;
+            $currencyCode = $currencyCodes[$pair->currency_id] ?? null;
+
+            if (!$networkCode || !$currencyCode) {
+                continue;
+            }
+
+            $isTestnet = $this->isTestnetNetwork($networkCode);
+
+            $fee = $this->resolveFee($networkCode, $currencyCode, $isTestnet);
 
             DB::table('fee_rules')->updateOrInsert(
                 [
@@ -41,5 +43,61 @@ final class FeeRulesSeeder extends Seeder
                 ]
             );
         }
+    }
+
+    private function resolveFee(string $networkCode, string $currencyCode, bool $isTestnet): string
+    {
+        // CHANGE: testnet fees kept zero to avoid accidental charging in dev/test environments.
+        if ($isTestnet) {
+            return '0';
+        }
+
+        // Bitcoin mainnet
+        if ($currencyCode === 'BTC') {
+            return '0.00020000';
+        }
+
+        // Tron
+        if ($networkCode === 'tron' || $networkCode === 'tron_nile') {
+            return match ($currencyCode) {
+                'TRX' => '1.000000',
+                'USDT' => '1.000000',
+                default => '0',
+            };
+        }
+
+        // EVM family
+        if ($this->isEvmNetwork($networkCode)) {
+            return match ($currencyCode) {
+                'ETH', 'MATIC', 'BNB' => '0.002000000000000000',
+                'USDT', 'USDC' => '5.000000',
+                default => '0',
+            };
+        }
+
+        return '0';
+    }
+
+    private function isEvmNetwork(string $networkCode): bool
+    {
+        return in_array($networkCode, [
+            'ethereum',
+            'arbitrum',
+            'base',
+            'polygon',
+            'bsc',
+            'ethereum_sepolia',
+            'arbitrum_sepolia',
+            'base_sepolia',
+            'polygon_amoy',
+        ], true);
+    }
+
+    private function isTestnetNetwork(string $networkCode): bool
+    {
+        return str_contains($networkCode, 'testnet')
+            || str_contains($networkCode, 'sepolia')
+            || str_contains($networkCode, 'nile')
+            || str_contains($networkCode, 'amoy');
     }
 }

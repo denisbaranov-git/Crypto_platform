@@ -7,29 +7,36 @@ use App\Domain\Wallet\Repositories\HdWalletRepository;
 use App\Domain\Wallet\ValueObjects\NetworkId;
 use App\Infrastructure\Persistence\Eloquent\Mappers\HdWalletMapper;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentHdWallet;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Support\Facades\DB;
 
-class EloquentHdWalletRepository implements HdWalletRepository
+final class EloquentHdWalletRepository implements HdWalletRepository
 {
-    public function __construct(private HdWalletMapper $mapper) {}
+    public function __construct(
+        private HdWalletMapper $mapper,
+    ) {}
 
     public function lockForNetwork(NetworkId $networkId): HdWallet
     {
-        //return DB::transaction(function () use ($networkId) {
-            $hdWallet = EloquentHdWallet::where('network_id', $networkId->value())
-                ->lockForUpdate()
-                ->firstOrFail();
-            return $this->mapper->toDomain($hdWallet);
-        //});
+        $model = EloquentHdWallet::where('network_id', $networkId->value())
+            ->lockForUpdate()
+            //->firstOrFail();
+            ->first();
+        if(!$model) {
+            throw new ModelNotFoundException("Network with ID {$networkId->value()} not found in table hd_wallets.");
+        }
+
+        return $this->mapper->toDomain($model);
     }
 
-    public function save(HdWallet $hdWallet): void
+    public function save(HdWallet $hdwallet): void
     {
-        DB::transaction(function () use ($hdWallet) {
-            $model = EloquentHdWallet::where('network_id', $hdWallet->networkId())->firstOrFail();
+        DB::transaction(function () use ($hdwallet) {
+            $model = EloquentHdWallet::where('network_id', $hdwallet->networkId()->value())->firstOrFail();
 
-            $model->next_index = $hdWallet->nextIndex();
-            $model->encrypted_xpub = encrypt($hdWallet->xpub()->value());
+            $model->next_index = $hdwallet->nextIndex();
+            $model->encrypted_xpub = encrypt($hdwallet->xpub()->value());
+            $model->status = $hdwallet->status();
             $model->save();
         });
     }

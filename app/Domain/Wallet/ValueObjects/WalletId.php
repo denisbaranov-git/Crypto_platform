@@ -11,7 +11,7 @@ class WalletId
         if ($id < 0) throw new \InvalidArgumentException('Wallet ID cannot be less than zero');
         return new self($id);
     }
-    public function value(): int
+    public function value(): ?int
     {
         return $this->id;
     }

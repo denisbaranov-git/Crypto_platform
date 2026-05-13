@@ -23,4 +23,9 @@ class EloquentWalletAddress extends Model
     {
         return $this->belongsTo(EloquentWallet::class);
     }
+
+    public function network()
+    {
+        return $this->belongsTo(EloquentNetwork::class);
+    }
 }

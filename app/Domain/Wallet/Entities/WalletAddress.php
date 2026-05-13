@@ -93,4 +93,12 @@ class WalletAddress
     {
         return $this->status;
     }
+    public function assignId(WalletAddressId $id): void
+    {
+        if ($this->id !== null) {
+            throw new \LogicException('Wallet Address id already assigned');
+        }
+
+        $this->id = $id;
+    }
 }

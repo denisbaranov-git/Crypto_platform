@@ -12,7 +12,6 @@ return new class extends Migration
     public function up(): void
     {
         Schema::create('wallet_addresses', function (Blueprint $table) {
-
             $table->id();
             $table->foreignId('wallet_id')->constrained()->cascadeOnDelete();
             $table->foreignId('network_id')->constrained();
@@ -25,9 +24,7 @@ return new class extends Migration
             $table->boolean('is_active')->default(true);
             $table->timestamps();
 
-            //Уникальность адреса в сети
             $table->unique(['network_id', 'address']);
-            //$table->unique(['network_id', 'derivation_index']);// индекс уникален в рамках сети  //denis ISSUE!!!!!!!!!!!!!!!!!
             $table->unique(
                 ['network_id', 'derivation_chain', 'derivation_index'],
                 'wallet_addresses_network_id_derivation_chain_derivation_index_unique'

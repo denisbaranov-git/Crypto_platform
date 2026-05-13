@@ -5,6 +5,7 @@ namespace App\Application\Wallet\Handlers;
 use App\Application\Wallet\Commands\IssueWalletAddressCommand;
 use App\Domain\Identity\ValueObjects\UserId;
 use App\Domain\Shared\EventPublisher;
+use App\Domain\Wallet\Entities\Wallet;
 use App\Domain\Wallet\Repositories\HdWalletRepository;
 use App\Domain\Wallet\Repositories\WalletRepository;
 use App\Domain\Wallet\Services\HDAddressGeneratorInterface;
@@ -27,16 +28,22 @@ final class IssueWalletAddressHandler
         private EventPublisher              $events
     ) {}
 
-    public function handle(IssueWalletAddressCommand $command): WalletAddress
+    public function handle(IssueWalletAddressCommand $command): Wallet//WalletAddress
     {
+        /**IssueWalletAddressCommand
+         *
+         * public int $userId,
+         * public int $networkId,
+         * public string $networkCode,
+         * public int $currencyNetworkId
+         */
         return DB::transaction(function () use ($command) {
 
             $userId = UserId::fromInt($command->userId);
             $currencyNetworkId = CurrencyNetworkId::fromInt($command->currencyNetworkId);
 
             $wallet = $this->wallets->getByUserAndCurrencyNetwork($userId, $currencyNetworkId);
-echo 'fuck ';
-var_dump($wallet);
+
             if ($wallet->status() !== WalletStatus::ACTIVE) {
                 throw new \DomainException('Wallet is not active');
             }
@@ -47,15 +54,11 @@ var_dump($wallet);
             $hdWallet = $this->hdWallets->lockForNetwork($networkId);
             $index =$hdWallet->nextIndex();
 
-            $xpub = XPub::fromString(
-                config("wallet.{$networkCode->value()}_xpub")
-            );
+            $generated = $this->generator->generate($networkCode->value(), $index);
 
-            $generated = $this->generator->generate($networkCode, $xpub, $index);
-echo 'fuck fuck fuck fuck fuck;';
-var_dump($generated);
-            $walletAddress = $wallet->issueAddress(
+            $walletAddress = $wallet->issueAddress( //->address create, add to Wallet->addresses
                 WalletAddressValue::fromString($generated->address()),
+                $generated->chain(),
                 $index,
                 DerivationPath::fromString($generated->path())
             );
@@ -65,11 +68,13 @@ var_dump($generated);
             $hdWallet->incrementNextIndex();
             $this->hdWallets->save($hdWallet);
 
-            DB::afterCommit(fn() =>
-            $this->events->publishAfterCommit($wallet->pullDomainEvents())
-            );
+//            DB::afterCommit(fn() =>
+//                $this->events->publishAfterCommit($wallet->pullDomainEvents())
+//            );
 
-            return $walletAddress;
+            $this->events->publishAfterCommit($wallet->pullDomainEvents());
+
+            return $wallet;//denis не нужно!!!
         });
     }
 }

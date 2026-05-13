@@ -4,6 +4,7 @@ import * as authApi from '@/api/auth'
 
 export const useAuthStore = defineStore('auth', () => {
     const user = ref(null)
+    const userRegister = ref(null)
     const loading = ref(false)
     const error = ref(null)
 
@@ -25,6 +26,7 @@ export const useAuthStore = defineStore('auth', () => {
         try {
             await authApi.csrfCookie()
             await authApi.login({ email, password })
+            userRegister.value = null
             await fetchUser()
         } catch (e) {
             error.value = 'Неверный email или пароль'
@@ -37,13 +39,22 @@ export const useAuthStore = defineStore('auth', () => {
     async function register(payload) {
         loading.value = true
         error.value = null
-
         try {
             await authApi.csrfCookie()
-            await authApi.register(payload)
+            const response = await authApi.register(payload)
+            userRegister.value = response.data.data ?? response.data ?? null
             await fetchUser()
         } catch (e) {
-            error.value = 'Не удалось зарегистрировать пользователя'
+            error.value = 'Не удалось зарегистрировать пользователя '
+            if(e.response?.status === 422){
+                const errors = e.response.data.errors
+                for (let field in errors){
+                    errors[field].forEach(message => {
+                        error.value += message;
+                    })
+                }
+            }
+
             throw e
         } finally {
             loading.value = false
@@ -58,6 +69,7 @@ export const useAuthStore = defineStore('auth', () => {
     return {
         user,
         loading,
+        userRegister,
         error,
         isAuthenticated,
         fetchUser,

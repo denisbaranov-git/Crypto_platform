@@ -2,29 +2,16 @@
 
 namespace App\Infrastructure\Persistence\Eloquent\Models;
 
-use App\Domain\Wallet\Entities\WalletAddress;
 use Illuminate\Database\Eloquent\Model;
 
 class EloquentWallet extends Model
 {
     protected $table = 'wallets';
-//$table->id();
-//$table->foreignId('user_id')->constrained();
-//    //$table->foreignId('network_id')->constrained();// denormalization denis!!!//????
-//$table->foreignId('currency_network_id')->constrained('currency_networks');
-//$table->string('status')->default('active');//active,locked,archived
-//    // Следующий индекс для HD-деривации адреса
-//    //$table->unsignedBigInteger('next_address_index')->default(0);
-//    // Удобный указатель на текущий активный адрес
-//$table->foreignId('active_address_id')->nullable()->constrained('wallet_addresses')->nullOnDelete();
-//$table->timestamps();
+
     protected $fillable = [
         'user_id',
-        'network_id',
         'currency_network_id',
-        'next_address_index',
         'status',
-        'next_address_index',
         'active_address_id'
     ];
 
@@ -34,7 +21,8 @@ class EloquentWallet extends Model
     }
     public function addresses(): \Illuminate\Database\Eloquent\Relations\HasMany
     {
-        return $this->hasMany(EloquentWalletAddress::class);
+        return $this->hasMany(EloquentWalletAddress::class, 'wallet_id');
+        //return $this->hasMany(EloquentWalletAddress::class);
     }
     public function currencyNetwork(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {

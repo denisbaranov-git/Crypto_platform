@@ -195,7 +195,8 @@ class InitHDWallet extends Command
             if ($existing === null) {
                 DB::table('hd_wallets')->insert([
                     'network_id' => $networkId,
-                    'xpub' => $xpub,
+                    //'xpub' => $xpub,
+                    'encrypted_xpub' => encrypt($xpub),
                     'next_index' => 0,
                     'created_at' => $now,
                     'updated_at' => $now,
@@ -209,7 +210,8 @@ class InitHDWallet extends Command
             DB::table('hd_wallets')
                 ->where('network_id', $networkId)
                 ->update([
-                    'xpub' => $xpub,
+                    //'xpub' => $xpub,
+                    'encrypted_xpub' => encrypt($xpub),
                     'updated_at' => $now,
                 ]);
 
