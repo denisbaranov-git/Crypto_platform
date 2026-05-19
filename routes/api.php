@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\DashboardController;
+use App\Http\Controllers\Api\DepositController;
 use App\Http\Controllers\Api\MeController;
 use App\Http\Controllers\Api\MobileAuthController;
 use App\Http\Controllers\Api\WalletAddressController;
@@ -26,6 +27,7 @@ Route::middleware('auth:sanctum')->group(function () {
     Route::get('/wallets/{wallet}', [WalletController::class, 'show'])->name('api.wallets.show');
     Route::post('/wallets', [WalletController::class, 'store'])->name('api.wallet.store');
     Route::post('/wallets/{wallet}/addresses', [WalletAddressController::class, 'store'])->name('api.address.store');
+    Route::patch('/wallets/{wallet}/addresses/{address}/activate', [WalletAddressController::class, 'activate'])->name('api.address.activate');
 
     Route::prefix('withdrawals')->group(function (): void {
         Route::get('/', [WithdrawalController::class, 'index']);
@@ -34,5 +36,8 @@ Route::middleware('auth:sanctum')->group(function () {
         Route::post('{withdrawal}/cancel', [WithdrawalController::class, 'cancel']);
         //Route::post('{withdrawal}/retry-broadcast', [WithdrawalController::class, 'retryBroadcast']);
     });
+
+    Route::get('/deposits', [DepositController::class, 'index'])->name('api.deposits.index');
+    Route::get('/deposits/{deposit}', [DepositController::class, 'show'])->name('api.deposits.show');
 
 });

@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import {fetchWallets, fetchWallet, createWallet, storeAddress, storeWallet} from '@/api/wallets'
+import {fetchWallets, fetchWallet, createWallet, storeAddress, storeWallet, activateAddress} from '@/api/wallets'
 
 export const useWalletsStore = defineStore('wallets', () => {
     const wallets = ref([])
@@ -16,7 +16,7 @@ export const useWalletsStore = defineStore('wallets', () => {
         loading.value = true
         try {
             const response = await fetchWallets()
-            // Предполагается, что API может возвращать { data: [...] } или { data: { data: [...] } }
+            //API может возвращать { data: [...] } или { data: { data: [...] } }
             wallets.value = response.data.data ?? response.data ?? []
         } finally {
             loading.value = false
@@ -36,7 +36,15 @@ export const useWalletsStore = defineStore('wallets', () => {
         loading.value = true
         try {
             const response = await storeAddress(wallet)
-            currentWallet.value = response.data.data ?? response.data ?? null
+            //currentWallet.value = response.data.data ?? response.data ?? null //currentWalletAddress
+        } finally {
+            loading.value = false
+        }
+    }
+    async function activateWalletAddress(id, wallet_address_id) {
+        loading.value = true
+        try {
+            const response = await activateAddress(id,wallet_address_id)
         } finally {
             loading.value = false
         }
@@ -71,5 +79,6 @@ export const useWalletsStore = defineStore('wallets', () => {
         fetchWalletCreateFormData,
         walletCreateFormData,
         storeNewWallet,
+        activateWalletAddress,
     }
 })

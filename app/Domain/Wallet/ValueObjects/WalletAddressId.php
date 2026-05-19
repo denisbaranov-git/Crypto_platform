@@ -15,4 +15,8 @@ class WalletAddressId
     {
         return $this->id;
     }
+    public function equals(self $other): bool
+    {
+        return $this->value() === $other->value();
+    }
 }

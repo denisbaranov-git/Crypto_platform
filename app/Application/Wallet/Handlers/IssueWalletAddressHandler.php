@@ -6,6 +6,7 @@ use App\Application\Wallet\Commands\IssueWalletAddressCommand;
 use App\Domain\Identity\ValueObjects\UserId;
 use App\Domain\Shared\EventPublisher;
 use App\Domain\Wallet\Entities\Wallet;
+use App\Domain\Wallet\Entities\WalletAddress;
 use App\Domain\Wallet\Repositories\HdWalletRepository;
 use App\Domain\Wallet\Repositories\WalletRepository;
 use App\Domain\Wallet\Services\HDAddressGeneratorInterface;
@@ -16,19 +17,18 @@ use App\Domain\Wallet\ValueObjects\NetworkId;
 use App\Domain\Wallet\ValueObjects\WalletAddressValue;
 use App\Domain\Wallet\ValueObjects\WalletStatus;
 use App\Domain\Wallet\ValueObjects\XPub;
-use App\Models\WalletAddress;
 use Illuminate\Support\Facades\DB;
 
 final class IssueWalletAddressHandler
 {
     public function __construct(
-        private WalletRepository            $wallets,
+        private WalletRepository            $walletsRepository,
         private HdWalletRepository          $hdWallets,
         private HDAddressGeneratorInterface $generator,
         private EventPublisher              $events
     ) {}
 
-    public function handle(IssueWalletAddressCommand $command): Wallet//WalletAddress
+    public function handle(IssueWalletAddressCommand $command): WalletAddress//Wallet//
     {
         /**IssueWalletAddressCommand
          *
@@ -42,7 +42,7 @@ final class IssueWalletAddressHandler
             $userId = UserId::fromInt($command->userId);
             $currencyNetworkId = CurrencyNetworkId::fromInt($command->currencyNetworkId);
 
-            $wallet = $this->wallets->getByUserAndCurrencyNetwork($userId, $currencyNetworkId);
+            $wallet = $this->walletsRepository->getByUserAndCurrencyNetwork($userId, $currencyNetworkId);
 
             if ($wallet->status() !== WalletStatus::ACTIVE) {
                 throw new \DomainException('Wallet is not active');
@@ -63,7 +63,9 @@ final class IssueWalletAddressHandler
                 DerivationPath::fromString($generated->path())
             );
 
-            $this->wallets->save($wallet);
+            $this->walletsRepository->save($wallet);
+
+            //$walletAddress->assignId(//////id);
 
             $hdWallet->incrementNextIndex();
             $this->hdWallets->save($hdWallet);
@@ -74,7 +76,8 @@ final class IssueWalletAddressHandler
 
             $this->events->publishAfterCommit($wallet->pullDomainEvents());
 
-            return $wallet;//denis не нужно!!!
+            //return $wallet;//denis //не нужно!!!
+            return $walletAddress;
         });
     }
 }

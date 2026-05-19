@@ -14,16 +14,7 @@ class DomainAddressResource extends JsonResource
      */
     public function toArray(Request $request): array
     {
-//private ?WalletAddressId $id = null;
-//private WalletAddressValue $address;
-//
-//private int $derivationChain;
-//
-//private int $derivationIndex;
-//private DerivationPath $derivationPath;
-//private bool $isActive = true;
-//private string $status = 'active';
-        //return parent::toArray($request);
+
         return [
             'id' => $this->id()?->value(),
             'address' => $this->address()->value(),

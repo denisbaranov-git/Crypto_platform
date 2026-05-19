@@ -136,10 +136,22 @@ final class Wallet
 
     public function activateAddress(WalletAddressId $addressId): void
     {
-        if (!$this->hasAddress($addressId)) {
+//        if (!$this->hasAddress($addressId)) {
+//            throw new \DomainException('Address does not belong to this wallet');
+//        }
+
+        $addressIsExist = false;
+        foreach ($this->addresses as $address) {
+            if ($address->id()?->equals($addressId)) {
+                $address->activate();
+                $addressIsExist = true;
+            }else{
+                $address->inactivate();
+            }
+        }
+        if (!$addressIsExist) {
             throw new \DomainException('Address does not belong to this wallet');
         }
-
         $this->activeAddressId = $addressId;
 
         $this->recordDomainEvent(new WalletAddressActivated($this->id->value(), $addressId->value()));

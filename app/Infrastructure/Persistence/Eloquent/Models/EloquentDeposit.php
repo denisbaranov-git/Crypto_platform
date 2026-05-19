@@ -46,4 +46,18 @@ final class EloquentDeposit extends Model
         'confirmations' => 'integer',
         'amount' => 'string',
     ];
+    public function currency()
+    {
+        return $this->belongsTo(EloquentCurrency::class);
+    }
+
+    public function network()
+    {
+        return $this->belongsTo(EloquentNetwork::class);
+    }
+
+    public function walletAddress()
+    {
+        return $this->belongsTo(EloquentWalletAddress::class);
+    }
 }

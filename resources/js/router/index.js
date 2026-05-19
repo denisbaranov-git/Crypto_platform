@@ -9,6 +9,7 @@ import WalletView from '@/views/WalletView.vue'
 import DepositsView from '@/views/DepositsView.vue'
 import WithdrawalsView from '@/views/WithdrawalsView.vue'
 import CreateWalletFormView from '@/views/CreateWalletFormView.vue'
+import DepositView from "@/views/DepositView.vue";
 
 const routes = [
     { path: '/login', name: 'login', component: LoginView, meta: { guestOnly: true } },
@@ -18,6 +19,7 @@ const routes = [
     { path: '/wallets', name: 'wallets', component: WalletsView, meta: { requiresAuth: true } },
     { path: '/wallets/:id', name: 'wallet.show', component: WalletView, meta: { requiresAuth: true } },
     { path: '/deposits', name: 'deposits', component: DepositsView, meta: { requiresAuth: true } },
+    { path: '/deposits/:id', name: 'deposit.show', component: DepositView, meta: { requiresAuth: true } },
     { path: '/withdrawals', name: 'withdrawals', component: WithdrawalsView, meta: { requiresAuth: true } },
     { path: '/wallets/create', name: 'wallet.create', component: CreateWalletFormView, meta: { requiresAuth: true } },
 

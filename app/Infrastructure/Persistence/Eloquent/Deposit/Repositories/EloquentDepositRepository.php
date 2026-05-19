@@ -50,7 +50,6 @@ final class EloquentDepositRepository implements DepositRepository
 
         return $model ? $this->mapper->toEntity($model) : null;
     }
-
     public function findByExternalKey(int $networkId, ExternalKey $externalKey): ?Deposit
     {
         $model = EloquentDeposit::query()
@@ -60,7 +59,6 @@ final class EloquentDepositRepository implements DepositRepository
 
         return $model ? $this->mapper->toEntity($model) : null;
     }
-
     public function existsByExternalKey(int $networkId, ExternalKey $externalKey): bool
     {
         return EloquentDeposit::query()
@@ -68,7 +66,6 @@ final class EloquentDepositRepository implements DepositRepository
             ->where('external_key', $externalKey->value())
             ->exists();
     }
-
     public function findOpenByNetwork(int $networkId, int $limit = 500): array
     {
         $rows = EloquentDeposit::query()
@@ -80,7 +77,6 @@ final class EloquentDepositRepository implements DepositRepository
 
         return $rows->map(fn (EloquentDeposit $row) => $this->mapper->toEntity($row))->all();
     }
-
     public function findByNetworkAndBlockNumberGreaterThan(int $networkId, int $blockNumber): array
     {
         $rows = EloquentDeposit::query()

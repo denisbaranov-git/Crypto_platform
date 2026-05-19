@@ -107,12 +107,10 @@ onMounted(async () => {
     if (!auth.user) {
         await auth.fetchUser()
     }
-
     // Important:
     // key is created when the form is opened
     // or at the first draft lifecycle moment.
     withdrawalsStore.ensureDraftKey()
-
     await refresh()
     presetFromQuery()
     syncWalletFields()

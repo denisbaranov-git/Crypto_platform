@@ -3,18 +3,13 @@
 namespace App\Http\Controllers\Api;
 
 use App\Application\Wallet\Commands\CreateWalletCommand;
-use App\Application\Wallet\Commands\IssueWalletAddressCommand;
 use App\Application\Wallet\Handlers\CreateWalletHandler;
-use App\Application\Wallet\Handlers\IssueWalletAddressHandler;
 use App\Http\Controllers\Controller;
-use App\Http\Requests\CreateAddressRequest;
 use App\Http\Requests\CreateWalletRequest;
 use App\Http\Resources\DomainWalletResource;
 use App\Http\Resources\WalletResource;
-use App\Infrastructure\Deposit\Services\EloquentCurrencyNetworkQueryService;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentCurrencyNetwork;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentWallet;
-use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;

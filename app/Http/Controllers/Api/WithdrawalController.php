@@ -8,28 +8,14 @@ use App\Application\Withdrawal\Commands\CancelWithdrawalCommand;
 use App\Application\Withdrawal\Handlers\CancelWithdrawalHandler;
 use App\Application\Withdrawal\Handlers\RequestWithdrawalHandler;
 use App\Http\Requests\RequestWithdrawalRequest;
-//use App\Jobs\BroadcastWithdrawalJob;
 use App\Http\Controllers\Controller;
 use App\Infrastructure\Persistence\Eloquent\Models\EloquentWithdrawal;
-use App\Infrastructure\Withdrawal\Jobs\BroadcastWithdrawalJob;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 final class WithdrawalController extends Controller
 {
-    // Важно: wallet API должен отдавать network_id и currency_network_id.
 
-
-    //Нужно что бы API GET /api/wallets отдаёт для каждого wallet хотя бы:
-    //
-    //id
-    //currency_code
-    //network_code
-    //network_id
-    //currency_network_id
-    //available_balance
-    //locked_balance
-    //active_address
     public function index(Request $request): JsonResponse
     {
         $userId = (int) $request->user()->id;

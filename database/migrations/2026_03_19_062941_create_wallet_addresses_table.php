@@ -21,7 +21,7 @@ return new class extends Migration
             $table->string('derivation_path', 255);
             $table->unsignedTinyInteger('derivation_chain')->default(0);// поле для нормализованной цепочки BIP44: 0 = external (депозиты), 1 = change/internal (внутренние UTXO)
             $table->string('status')->default('active');
-            $table->boolean('is_active')->default(true);
+            $table->boolean('is_active')->default(false); //active/inactive
             $table->timestamps();
 
             $table->unique(['network_id', 'address']);

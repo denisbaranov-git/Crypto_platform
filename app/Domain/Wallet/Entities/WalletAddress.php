@@ -18,7 +18,7 @@ class WalletAddress
 
     private int $derivationIndex;
     private DerivationPath $derivationPath;
-    private bool $isActive = true;
+    private bool $isActive = false;
     private string $status = 'active';
 
     private function __construct(
@@ -78,17 +78,22 @@ class WalletAddress
     {
         return $this->derivationIndex;
     }
-
     public function derivationPath(): DerivationPath
     {
         return $this->derivationPath;
     }
-
+    public function activate(): bool
+    {
+        return $this->isActive = true;
+    }
+    public function inactivate(): bool
+    {
+        return $this->isActive = false;
+    }
     public function isActive(): bool
     {
         return $this->isActive;
     }
-
     public function status(): string
     {
         return $this->status;
@@ -100,5 +105,9 @@ class WalletAddress
         }
 
         $this->id = $id;
+    }
+    public function equals(self $other): bool
+    {
+        return $this->address()->value() === $other->address()->value();
     }
 }

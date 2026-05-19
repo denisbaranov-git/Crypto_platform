@@ -16,28 +16,42 @@ async function loadWallet() {
     await walletsStore.loadWallet(walletId.value)
 }
 
-async function issueWalletAddress() { //denis???
+async function issueWalletAddress() {
     formError.value = null
     formSuccess.value = ''
     try {
-        const created = await walletsStore.issueWalletAddress({
+        await walletsStore.issueWalletAddress({
             user_id: null,
+            id: Number(walletsStore.currentWallet.network_id),
             network_id: Number(walletsStore.currentWallet.network_id),
             network_code: walletsStore.currentWallet.network_code,
             currency_network_id: Number(walletsStore.currentWallet.currency_network_id),
         })
         await loadWallet();
-        formSuccess.value = `Address #${created.id} created successfully.`
+        formSuccess.value = `Address created successfully.`
     } catch (e) {
         formError.value = e?.response?.data?.message || e?.message || 'Unable to create address'
     }
 }
 
+async function activateWalletAddress(wallet_address_id) {
+    formError.value = null
+    formSuccess.value = ''
+    try {
+        await walletsStore.activateWalletAddress(
+            Number(walletsStore.currentWallet.id),
+            wallet_address_id,
+        )
+        await loadWallet();
+        formSuccess.value = `Address activated.`
+    } catch (e) {
+        formError.value = e?.response?.data?.message || e?.message || 'Unable to activate address'
+    }
+}
 function goToWithdraw() {
     const wallet = walletsStore.currentWallet
     if (!wallet) return
 
-    // Важно: wallet API должен отдавать network_id и currency_network_id.
     router.push({
         path: '/withdrawals',
         query: {
@@ -111,25 +125,41 @@ watch(walletId, loadWallet)
                 {{ formSuccess }}
             </div>
 
-            <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
-                <h2 class="mb-4 text-lg font-semibold">Addresses</h2>
+            <div class="flex flex-col gap-4 md:flex-row md:items-start md:justify-between mb-6">
+                <h2 class="text-lg font-semibold">Addresses</h2>
                 <button
-                    class="rounded-xl bg-indigo-600 px-4 py-3 text-sm font-medium text-white hover:bg-indigo-500"
+                    class="rounded-xl bg-indigo-600 px-4 py-3 text-sm font-medium text-white hover:bg-indigo-500 transition-colors"
                     @click="issueWalletAddress"
                 >
                     Create new address
                 </button>
             </div>
+
             <div class="space-y-3">
                 <div
                     v-for="address in walletsStore.currentWallet.addresses"
                     :key="address.address"
                     class="flex items-center justify-between rounded-xl bg-slate-950 px-4 py-3"
                 >
-                    <div class="break-all text-sm">{{ address.address }}</div>
-                    <span class="text-xs" :class="address.is_active ? 'text-emerald-300' : 'text-slate-400'">
-                        {{ address.is_active ? 'active' : 'inactive' }}
+                    <div class="break-all text-sm flex-1">{{ address.address }}</div>
+                    <div class="flex items-center gap-3 ml-4">
+                <span
+                    class="text-xs font-medium"
+                    :class="address.is_active ? 'text-emerald-300' : 'text-slate-400'"
+                >
+                    {{ address.is_active ? 'active' : 'inactive' }}
+                </span>
+                        <button
+                            v-if="!address.is_active"
+                            class="relative group text-xs font-medium text-emerald-300 border border-emerald-500/30 rounded-lg px-2.5 py-1 hover:bg-emerald-500/10 hover:border-emerald-500/50 transition-all"
+                            @click="activateWalletAddress(address.id)"
+                        >
+                            activate
+                            <span class="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 px-2 py-1 text-xs font-medium text-white bg-slate-700 rounded-md opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                        Make this address active
                     </span>
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>

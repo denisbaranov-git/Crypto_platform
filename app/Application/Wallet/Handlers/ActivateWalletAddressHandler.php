@@ -6,8 +6,11 @@ use App\Application\Wallet\Commands\ActivateWalletAddressCommand;
 use App\Application\Wallet\Commands\LockWalletCommand;
 use App\Domain\Shared\EventPublisher;
 use App\Domain\Wallet\Entities\Wallet;
+use App\Domain\Wallet\Repositories\WalletAddressRepository;
 use App\Domain\Wallet\Repositories\WalletRepository;
+use App\Domain\Wallet\ValueObjects\WalletAddressId;
 use App\Domain\Wallet\ValueObjects\WalletId;
+use Illuminate\Support\Facades\DB;
 
 class ActivateWalletAddressHandler
 {
@@ -17,13 +20,16 @@ class ActivateWalletAddressHandler
     ) {}
     public function handle(ActivateWalletAddressCommand $command) : Wallet
     {
-        $walletId = WalletId::fromInt($command->walletId);
-        $wallet = $this->walletRepository->findById($walletId);
-        $wallet->activate();
-        $this->walletRepository->save($wallet);
+        return DB::transaction(function () use ($command) {
+            $walletId = WalletId::fromInt($command->walletId);
+            $activeAddressId = WalletAddressId::fromInt($command->newActiveAddressId);
+            $wallet = $this->walletRepository->findById($walletId);
+            $wallet->activateAddress($activeAddressId);
 
-        $this->events->publish($wallet->pullDomainEvents());
+            $this->walletRepository->save($wallet);
+            $this->events->publishAfterCommit($wallet->pullDomainEvents());
 
-        return $wallet;
+            return $wallet;
+        });
     }
 }

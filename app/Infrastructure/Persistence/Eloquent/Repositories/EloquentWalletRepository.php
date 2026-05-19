@@ -19,9 +19,9 @@ final class EloquentWalletRepository implements WalletRepository
 
     public function findById(WalletId $id): ?Wallet
     {
-        $model = EloquentWallet::findOrFail($id);
+        $model = EloquentWallet::findOrFail($id->value());
 
-        return $this->mapper->toDomain($model, $model->addresses);
+        return $this->mapper->toDomain($model, $model->addresses->all());
     }
 
     public function getByUserAndCurrencyNetwork(UserId $userId, CurrencyNetworkId $currencyNetworkId): ?Wallet

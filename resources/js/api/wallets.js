@@ -11,7 +11,7 @@ export function fetchWallet(id) {
 export function storeAddress(wallet) {
 
     return http.post(
-        '/api/wallets/${id}/addresses',
+        `/api/wallets/${wallet.id}/addresses`,
         wallet,
     )
 }
@@ -28,5 +28,12 @@ export function storeWallet(currency_network_id) {
         currency_network_id,
     )
 }
+export function activateAddress(wallet_id,wallet_address_id) {
 
+    return http.patch(
+        `/api/wallets/${wallet_id}/addresses/${wallet_address_id}/activate`,
+        // id,
+        // wallet_address_id,
+    )
+}
 
